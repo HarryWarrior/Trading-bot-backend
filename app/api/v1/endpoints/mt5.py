@@ -70,6 +70,44 @@ async def sync_mt5_account(account_id: str):
         )
 
 
+@router.post("/accounts/{account_id}/activate", response_model=MT5AccountResponse)
+async def activate_mt5_account(account_id: str):
+    """
+    Switch active MetaTrader account for dashboard and analytics ingestion.
+    """
+    try:
+        account = await MT5Service.set_active_account(account_id)
+        logger.info(f"Activated MT5 account {account.login} ({account.id})")
+        return account
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error activating MT5 account {account_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to activate account: {str(e)}",
+        )
+
+
+@router.delete("/accounts/{account_id}", status_code=status.HTTP_200_OK)
+async def delete_mt5_account(account_id: str):
+    """
+    Unlink and delete a registered MetaTrader account.
+    """
+    try:
+        await MT5Service.delete_account(account_id)
+        logger.info(f"Deleted MT5 account {account_id}")
+        return {"success": True, "message": f"Account {account_id} successfully removed"}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error deleting MT5 account {account_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete account: {str(e)}",
+        )
+
+
 @router.get("/accounts/{account_id}/status")
 async def get_account_status(account_id: str):
     """
@@ -88,6 +126,7 @@ async def get_account_status(account_id: str):
         "server": account.get("server"),
         "login": account.get("login"),
         "is_connected": account.get("is_connected", True),
+        "is_active": account.get("is_active", False),
         "balance": account.get("balance", 10000.0),
         "equity": account.get("equity", 10000.0),
         "last_sync_at": account.get("last_sync_at"),

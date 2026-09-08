@@ -22,25 +22,31 @@ def test_health_check():
     assert response.json()["status"] == "healthy"
 
 
-def test_get_summary_without_data():
-    """Test del endpoint de summary sin datos cargados"""
+def test_get_summary():
+    """Test summary endpoint returns calculated trade metrics."""
     response = client.get("/api/v1/analytics/summary")
-    # Debería retornar 404 si no hay archivos CSV
-    assert response.status_code in [404, 500]
+    assert response.status_code == 200
+    data = response.json()
+    assert "total_trades" in data
+    assert "win_rate" in data
+    assert "profit_factor" in data
 
 
-def test_get_trades_without_data():
-    """Test del endpoint de trades sin datos cargados"""
+def test_get_trades():
+    """Test trades collection endpoint returns parsed trades list."""
     response = client.get("/api/v1/analytics/trades")
-    # Debería retornar 404 si no hay archivos CSV
-    assert response.status_code in [404, 500]
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) > 0
 
 
-def test_get_symbol_stats_without_data():
-    """Test del endpoint de symbol stats sin datos cargados"""
+def test_get_symbol_stats():
+    """Test symbol breakdown analytics returns per-symbol metrics."""
     response = client.get("/api/v1/analytics/by-symbol")
-    # Debería retornar 404 si no hay archivos CSV
-    assert response.status_code in [404, 500]
+    assert response.status_code == 200
+    data = response.json()
+    assert "symbols" in data
 
 
 # TODO: Agregar tests con datos de prueba

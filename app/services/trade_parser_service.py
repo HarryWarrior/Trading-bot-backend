@@ -50,13 +50,18 @@ class TradeParserService:
             # Mostrar columnas originales para debug
             logger.info(f"📋 Columnas encontradas: {list(df.columns)}")
             
-            # Manejar columnas duplicadas (Time, Price) en reportes de MT5
-            # Pandas renombra duplicados automáticamente: Time, Time.1, Price, Price.1
-            column_mapping_duplicates = {
+            # Normalize column names: handle duplicate columns (Time, Time.1) and all naming conventions
+            column_mapping = {
+                # Duplicate columns from MT5 HTML/Excel exports
                 'Time': 'open_time',
                 'Time.1': 'close_time',
                 'Price': 'open_price',
                 'Price.1': 'close_price',
+                # Explicit Open/Close column variations
+                'Open Time': 'open_time',
+                'Close Time': 'close_time',
+                'Open Price': 'open_price',
+                'Close Price': 'close_price',
                 'Symbol': 'symbol',
                 'Type': 'order_type',
                 'Volume': 'volume',
@@ -66,21 +71,55 @@ class TradeParserService:
                 'S / L': 'sl',
                 'T / P': 'tp',
                 'Comment': 'comment',
-                # Variantes español
+                # Spanish variants
+                'Hora de Apertura': 'open_time',
+                'Hora de Cierre': 'close_time',
+                'Precio de Apertura': 'open_price',
+                'Precio de Cierre': 'close_price',
                 'Símbolo': 'symbol',
+                'Simbolo': 'symbol',
                 'Tipo': 'order_type',
                 'Volumen': 'volume',
                 'Ganancias': 'profit_usd',
+                'Beneficio': 'profit_usd',
                 'Comisión': 'commission',
-                'Comente': 'comment'
+                'Comision': 'commission',
+                'Comente': 'comment',
+                'Comentario': 'comment',
             }
-            df.rename(columns=column_mapping_duplicates, inplace=True)
-            
-            logger.info(f"📋 Columnas después del renombrado: {list(df.columns)}")
-            
-            # Validar que existan las columnas requeridas
-            required_columns = ['open_time', 'close_time', 'symbol', 'order_type', 'volume', 
-                              'open_price', 'close_price', 'profit_usd']
+            df.rename(columns=column_mapping, inplace=True)
+
+            # Secondary pass: normalize remaining columns (strip spaces, lowercase, replace spaces with underscores)
+            def normalize_col(c: str) -> str:
+                c_clean = str(c).strip().lower().replace(' ', '_')
+                aliases = {
+                    'open_time': 'open_time',
+                    'opentime': 'open_time',
+                    'close_time': 'close_time',
+                    'closetime': 'close_time',
+                    'open_price': 'open_price',
+                    'openprice': 'open_price',
+                    'close_price': 'close_price',
+                    'closeprice': 'close_price',
+                    'symbol': 'symbol',
+                    'type': 'order_type',
+                    'order_type': 'order_type',
+                    'ordertype': 'order_type',
+                    'volume': 'volume',
+                    'lots': 'volume',
+                    'profit': 'profit_usd',
+                    'profit_usd': 'profit_usd',
+                    'pnl': 'profit_usd',
+                    'commission': 'commission',
+                    'swap': 'swap',
+                    'sl': 'sl',
+                    'tp': 'tp',
+                    'comment': 'comment'
+                }
+                return aliases.get(c_clean, c_clean)
+
+            df.columns = [normalize_col(c) for c in df.columns]
+            required_columns = ['open_time', 'close_time', 'symbol', 'order_type', 'volume', 'open_price', 'close_price', 'profit_usd']
             missing_columns = [col for col in required_columns if col not in df.columns]
             
             if missing_columns:

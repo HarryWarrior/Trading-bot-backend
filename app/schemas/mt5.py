@@ -27,6 +27,7 @@ class MT5AccountResponse(BaseModel):
     broker_name: Optional[str] = None
     platform: str = "MT5"
     is_connected: bool = False
+    is_active: bool = False
     last_sync_at: Optional[datetime] = None
     balance: float = 0.0
     equity: float = 0.0

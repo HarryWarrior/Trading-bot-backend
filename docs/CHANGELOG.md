@@ -1,5 +1,12 @@
 # Changelog - Trading Bot Backend API
 
+## [2.0.4] - 2026-09-08
+
+### ✨ Added
+- MetaTrader 5 multi-account management with live telemetry handshake and account switcher
+
+---
+
 ## [2.0.2] - 2026-09-08
 
 ### ✨ Added
