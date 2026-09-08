@@ -1,5 +1,12 @@
 # Changelog - Trading Bot Backend API
 
+## [2.0.2] - 2026-09-08
+
+### ✨ Added
+- MetaTrader 5 live integration and conflict resolution for pymongo/bson
+
+---
+
 ## [2.0.0] - 2025-12-03 - Sistema de Autenticación Completo 🔐
 
 ### ✨ Nuevas características principales

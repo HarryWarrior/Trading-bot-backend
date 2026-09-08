@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 # Importar routers
-from app.api.v1.endpoints import analytics, auth
+from app.api.v1.endpoints import analytics, auth, mt5
 
 # Importar configuración de MongoDB
 from app.config.database import MongoDB
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Trading Bot Backend API",
     description="API profesional para análisis de trading y gestión de usuarios con autenticación completa",
-    version="2.0.0",
+    version="2.0.2",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -62,6 +62,12 @@ app.include_router(
     auth.router,
     prefix="/api/v1/auth",
     tags=["Authentication"]
+)
+
+app.include_router(
+    mt5.router,
+    prefix="/api/v1/mt5",
+    tags=["MetaTrader 5"]
 )
 
 # Health check

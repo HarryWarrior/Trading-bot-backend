@@ -8,6 +8,8 @@ from app.services.trade_parser_service import TradeParserService
 from app.services.analytics_service import AnalyticsService
 from app.schemas.analytics import Analytics
 from app.schemas.trade import Trade
+from app.schemas.mt5 import RatesResponse
+from app.services.mt5_service import MT5Service
 
 router = APIRouter()
 
@@ -338,3 +340,20 @@ async def get_monthly_stats():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# OHLCV CANDLESTICK RATES
+@router.get('/rates', response_model=RatesResponse)
+async def get_candlestick_rates(
+    symbol: str = Query(..., description="Asset symbol (e.g. EURUSD, GBPUSD, XAUUSD)"),
+    timeframe: str = Query('5m', description="Timeframe: 1m, 5m, 15m, 1h, 4h, 1D"),
+    count: int = Query(200, ge=10, le=1000, description="Candle count (10-1000)")
+):
+    """
+    Get historical OHLCV candlestick time series for candlestick and backtesting charts.
+    """
+    try:
+        return MT5Service.get_historical_rates(symbol=symbol, timeframe=timeframe, count=count)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
