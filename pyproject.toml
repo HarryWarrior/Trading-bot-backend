@@ -1,0 +1,34 @@
+[tool.ruff]
+# Target Python version
+target-version = "py311"
+
+# Line length standard
+line-length = 100
+
+# Files to exclude
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+# Select rules: E (pycodestyle errors), W (warnings), F (Pyflakes), I (isort), UP (pyupgrade)
+select = ["E", "F", "W", "I", "UP"]
+ignore = ["E501"] # Line length handled by formatter
+
+# Allow autofix for all enabled rules (when `--fix`) is provided
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.format]
+# Use double quotes for strings
+quote-style = "double"
+
+# Indent with 4 spaces
+indent-style = "space"
+
+# Format docstrings
+docstring-code-format = true

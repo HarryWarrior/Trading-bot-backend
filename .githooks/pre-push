@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Git Pre-Push Hook: Code Quality (Ruff) & Automated Changelog Verifier
+# ==============================================================================
+# 1. Runs 'ruff check' to enforce linting rules (if ruff is available).
+# 2. Runs 'ruff format --check' to enforce code formatting.
+# 3. Verifies that docs/CHANGELOG.md is updated with the current application version.
+
+echo "🔍 [pre-push hook] Initializing quality & changelog verification..."
+
+# ------------------------------------------------------------------------------
+# STEP 1: Ruff Linter & Formatter
+# ------------------------------------------------------------------------------
+RUFF_CMD=""
+if command -v ruff &> /dev/null; then
+    RUFF_CMD="ruff"
+elif python -m ruff --version &> /dev/null; then
+    RUFF_CMD="python -m ruff"
+elif python3 -m ruff --version &> /dev/null; then
+    RUFF_CMD="python3 -m ruff"
+elif py -m ruff --version &> /dev/null; then
+    RUFF_CMD="py -m ruff"
+fi
+
+if [ -n "$RUFF_CMD" ]; then
+    echo "⚡ [1/3] Checking code quality ($RUFF_CMD check .)..."
+    $RUFF_CMD check .
+    if [ $? -ne 0 ]; then
+        echo "❌ [pre-push hook] Ruff check failed! Fix the lint errors before pushing."
+        exit 1
+    fi
+
+    echo "🎨 [2/3] Checking code formatting ($RUFF_CMD format --check .)..."
+    $RUFF_CMD format --check .
+    if [ $? -ne 0 ]; then
+        echo "❌ [pre-push hook] Ruff formatting check failed!"
+        echo "💡 Run '$RUFF_CMD format .' to auto-format your code, then commit and push again."
+        exit 1
+    fi
+else
+    echo "⚠️ [pre-push hook] Ruff not found in current environment. Skipping Ruff check."
+fi
+
+# ------------------------------------------------------------------------------
+# STEP 2: Changelog & Version Synchronization
+# ------------------------------------------------------------------------------
+echo "📝 [3/3] Verifying changelog synchronization..."
+
+PYTHON_CMD=""
+if command -v python &> /dev/null && python --version &> /dev/null; then
+    PYTHON_CMD="python"
+elif command -v python3 &> /dev/null && python3 --version &> /dev/null; then
+    PYTHON_CMD="python3"
+elif command -v py &> /dev/null && py --version &> /dev/null; then
+    PYTHON_CMD="py"
+fi
+
+if [ -n "$PYTHON_CMD" ]; then
+    $PYTHON_CMD scripts/update_changelog.py --check-only
+    CHANGELOG_STATUS=$?
+
+    if [ $CHANGELOG_STATUS -ne 0 ]; then
+        echo "⚠️ [pre-push hook] CHANGELOG verification failed."
+        echo "💡 To automatically bump version and record your changes, run:"
+        echo "   $PYTHON_CMD scripts/update_changelog.py --bump patch --message \"Your new feature description\""
+        exit 1
+    fi
+else
+    echo "⚠️ [pre-push hook] Python runtime not found. Skipping changelog script verification."
+fi
+
+echo "✅ [pre-push hook] All checks passed successfully! Proceeding with git push."
+exit 0
