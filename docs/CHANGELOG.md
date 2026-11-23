@@ -1,5 +1,19 @@
 # Changelog - Trading Bot Backend API
 
+## [Unreleased]
+
+### Added
+- `AGENTS.md`, `.agents/rules/` and `.agents/templates/`: single source of rules for AI agents (replaces `.gemini/rules`).
+- `libs/shared` (`trading_shared`): response envelope, pagination (`page_params`), error envelope, settings, logging.
+- `services/_template`: canonical hexagonal microservice with architecture test.
+- `docs/`: architecture, services catalog, ADRs 0001-0003, integrations research log.
+- `specs/`: spec workflow and drafts 001-004 (service migration, MT5 EA bridge, backtest-to-live, AI journal).
+
+### Removed
+- `docs/project-spec.md`, `docs/tech-spec.md` (folded into `docs/architecture.md` and `.agents/rules/`).
+
+---
+
 ## [2.0.4] - 2026-09-08
 
 ### ✨ Added
