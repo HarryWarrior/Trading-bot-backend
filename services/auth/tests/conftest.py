@@ -1,8 +1,18 @@
-"""In-memory fakes for every auth port."""
+"""Shared test fakes and fixtures for every auth port."""
 
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
+from auth_service.application.use_cases.forgot_password import ForgotPassword
+from auth_service.application.use_cases.refresh_session import RefreshSession
+from auth_service.application.use_cases.resend_verification import ResendVerification
+from auth_service.application.use_cases.reset_password import ResetPassword
+from auth_service.application.use_cases.sign_in import SignIn
+from auth_service.application.use_cases.sign_out import SignOut
+from auth_service.application.use_cases.sign_up import SignUp
+from auth_service.application.use_cases.verify_email import VerifyEmail
 from auth_service.domain.user import Role, User
 
 
@@ -131,3 +141,54 @@ class RecordingEmailSender:
 
     async def send_password_reset(self, email: str, token: str) -> None:
         self.resets.append((email, token))
+
+
+class World:
+    def __init__(self) -> None:
+        self.users = FakeUserRepository()
+        self.verifications = FakeVerificationRepository()
+        self.sessions = FakeSessionRepository()
+        self.resets = FakePasswordResetRepository()
+        self.hasher = FakePasswordHasher()
+        self.issuer = FakeAccessTokenIssuer()
+        self.secrets = SequentialSecrets()
+        self.email = RecordingEmailSender()
+        self.clock = FixedClock()
+
+    def sign_up(self):
+        return SignUp(
+            self.users, self.verifications, self.hasher, self.secrets, self.email, self.clock
+        )
+
+    def verify(self):
+        return VerifyEmail(self.users, self.verifications, self.clock)
+
+    def resend(self):
+        return ResendVerification(
+            self.users, self.verifications, self.secrets, self.email, self.clock
+        )
+
+    def sign_in(self):
+        return SignIn(self.users, self.sessions, self.hasher, self.issuer, self.secrets, self.clock)
+
+    def refresh(self):
+        return RefreshSession(self.users, self.sessions, self.issuer, self.secrets, self.clock)
+
+    def sign_out(self):
+        return SignOut(self.sessions)
+
+    def forgot(self):
+        return ForgotPassword(self.users, self.resets, self.secrets, self.email, self.clock)
+
+    def reset(self):
+        return ResetPassword(self.users, self.resets, self.sessions, self.hasher, self.clock)
+
+    async def registered_verified(self, email="user@mail.com", password="Secret123!"):
+        user = await self.sign_up().execute(email, password, "Ana")
+        await self.verify().execute(email, self.email.verifications[-1][1])
+        return user
+
+
+@pytest.fixture
+def world() -> World:
+    return World()
