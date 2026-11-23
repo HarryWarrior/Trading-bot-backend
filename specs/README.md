@@ -16,8 +16,8 @@ design (draft) → owner approves (approved) → plan.md → execute with TDD (i
 
 | # | Title | Status | Backend | Frontend |
 |---|---|---|---|---|
-| 000 | Agents foundation (rules, templates, docs, spec workflow) | in-progress | [design](000-agents-foundation/design.md) · [plan](000-agents-foundation/plan.md) | yes |
-| 001 | Migrate legacy app to services + security debt | draft | [design](001-service-migration/design.md) | yes |
+| 000 | Agents foundation (rules, templates, docs, spec workflow) | done | [design](000-agents-foundation/design.md) · [plan](000-agents-foundation/plan.md) | yes |
+| 001 | Real data only: auth, journal, analytics, MT5 services | approved | [design](001-service-migration/design.md) | yes |
 | 002 | MT5 automatic sync via EA bridge | draft | [design](002-mt5-ea-bridge-sync/design.md) | yes |
 | 003 | Strategy → backtest → paper → live bot | draft | [design](003-strategy-backtest-live/design.md) | yes |
 | 004 | AI-filled journal (MCP / API) | draft | [design](004-ai-journal/design.md) | yes |
