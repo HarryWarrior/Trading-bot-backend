@@ -34,4 +34,4 @@ indent-style = "space"
 docstring-code-format = true
 
 [tool.ruff.lint.isort]
-known-first-party = ["app", "trading_shared", "template_service"]
+known-first-party = ["app", "trading_shared", "template_service", "auth_service"]
