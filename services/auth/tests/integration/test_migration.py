@@ -133,3 +133,18 @@ async def test_promote_admin_script(dbs, capsys):
     assert await promote.run(["Old.User@Mail.com"]) == 0
     stored = await MongoUserRepository(target).get_by_email("old.user@mail.com")
     assert stored.role is Role.ADMIN
+
+
+async def test_migration_refuses_when_source_equals_target(dbs, capsys):
+    _, target = dbs
+    await target["users"].insert_one({"email": "x@mail.com", "password_hash": "h"})
+    before_indexes = await target["users"].index_information()
+
+    code = await _load("migrate_legacy_users").run(
+        ["--source-url", MONGO_URL + "/", "--source-db", target.name]
+    )
+
+    assert code == 2
+    assert "same database" in capsys.readouterr().err
+    assert await target["users"].count_documents({}) == 1
+    assert await target["users"].index_information() == before_indexes

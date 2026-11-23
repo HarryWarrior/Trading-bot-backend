@@ -15,6 +15,10 @@ from auth_service.settings import AuthSettings
 from trading_shared.mongo import create_mongo_client
 
 
+def _normalize_url(url: str) -> str:
+    return url.strip().rstrip("/")
+
+
 async def run(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-url", default=None, help="default: MONGODB_URL from settings")
@@ -22,8 +26,18 @@ async def run(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     settings = AuthSettings()
+    source_url = args.source_url or settings.mongodb_url
+    if _normalize_url(source_url) == _normalize_url(settings.mongodb_url) and (
+        args.source_db == settings.database_name
+    ):
+        print(
+            f"error: source and target are the same database ({args.source_db!r}); refusing to "
+            "write into the legacy database. Check DATABASE_NAME.",
+            file=sys.stderr,
+        )
+        return 2
     target_client = create_mongo_client(settings.mongodb_url)
-    source_client = create_mongo_client(args.source_url or settings.mongodb_url)
+    source_client = create_mongo_client(source_url)
     try:
         users = MongoUserRepository(target_client[settings.database_name])
         await users.create_indexes()
