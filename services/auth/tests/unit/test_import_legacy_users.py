@@ -8,6 +8,9 @@ from auth_service.application.use_cases.import_legacy_users import ImportLegacyU
 from auth_service.application.use_cases.promote_to_admin import PromoteToAdmin, UserNotFound
 from auth_service.domain.user import Role
 
+pytestmark = pytest.mark.asyncio
+
+
 GOOD_HASH = bcrypt.hashpw(b"pw", bcrypt.gensalt(4)).decode()
 
 

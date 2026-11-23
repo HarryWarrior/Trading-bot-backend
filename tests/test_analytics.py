@@ -1,10 +1,25 @@
 # tests/test_analytics.py
 
+import shutil
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
+
 from app.main import app
 
+SAMPLE_REPORT = Path(__file__).resolve().parents[1] / "data" / "samples" / "sample_trades.csv"
+
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolated_data_dir(tmp_path, monkeypatch):
+    """Run each test in a temp cwd whose data/raw holds only the sample report."""
+    raw = tmp_path / "data" / "raw"
+    raw.mkdir(parents=True)
+    shutil.copy(SAMPLE_REPORT, raw / "sample_trades.csv")
+    monkeypatch.chdir(tmp_path)
 
 
 def test_root_endpoint():

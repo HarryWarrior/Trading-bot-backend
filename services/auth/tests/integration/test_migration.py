@@ -17,6 +17,9 @@ from auth_service.domain.errors import InvalidCredentials
 from auth_service.domain.user import Role
 from trading_shared.mongo import create_mongo_client
 
+pytestmark = pytest.mark.asyncio
+
+
 MONGO_URL = "mongodb://localhost:27017"
 NOW = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"

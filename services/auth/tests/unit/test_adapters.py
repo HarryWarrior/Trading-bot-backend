@@ -1,6 +1,8 @@
 import logging
 from datetime import UTC, datetime
 
+import pytest
+
 from auth_service.adapters.outbound.bcrypt_hasher import BcryptPasswordHasher
 from auth_service.adapters.outbound.email_senders import LogEmailSender, SmtpEmailSender
 from auth_service.adapters.outbound.jwt_issuer import JwtAccessTokenIssuer
@@ -56,6 +58,7 @@ def test_system_clock_is_timezone_aware_utc():
     assert now.utcoffset().total_seconds() == 0
 
 
+@pytest.mark.asyncio
 async def test_log_email_sender_writes_code_and_reset_link(caplog):
     logger = logging.getLogger("auth.test.email")
     sender = LogEmailSender(logger)
@@ -92,6 +95,7 @@ class FakeSMTP:
         self.message = message
 
 
+@pytest.mark.asyncio
 async def test_smtp_sender_uses_starttls_login_and_sends():
     FakeSMTP.instances.clear()
     sender = SmtpEmailSender(

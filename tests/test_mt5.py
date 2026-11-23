@@ -3,8 +3,9 @@ Unit tests for MetaTrader 5 service, encryption, deal simulation, and rate feeds
 """
 
 import pytest
-from app.services.mt5_service import MT5Service, _encrypt_password, _decrypt_password
-from app.schemas.mt5 import RatesResponse, RateCandle
+
+from app.schemas.mt5 import RateCandle, RatesResponse
+from app.services.mt5_service import MT5Service, _decrypt_password, _encrypt_password
 
 
 def test_encryption_decryption_cycle():
@@ -40,6 +41,7 @@ def test_rates_candlestick_generation():
 def test_mt5_account_response_schema_active_field():
     """Verify MT5AccountResponse supports is_active state flag."""
     from datetime import datetime
+
     from app.schemas.mt5 import MT5AccountResponse
 
     account = MT5AccountResponse(
@@ -64,16 +66,22 @@ def test_mt5_account_response_schema_active_field():
 async def test_broker_connection_validation_failure():
     """Verify that invalid credentials or unreachable servers are rejected with ValueError."""
     with pytest.raises(ValueError, match="Invalid MT5 Login ID"):
-        await MT5Service._test_broker_connection(login=0, password="validpass123", server="ICMarkets-Live")
+        await MT5Service._test_broker_connection(
+            login=0, password="validpass123", server="ICMarkets-Live"
+        )
 
     with pytest.raises(ValueError, match="Invalid Password"):
-        await MT5Service._test_broker_connection(login=12345, password="12", server="ICMarkets-Live")
+        await MT5Service._test_broker_connection(
+            login=12345, password="12", server="ICMarkets-Live"
+        )
 
     with pytest.raises(ValueError, match="Invalid Server"):
         await MT5Service._test_broker_connection(login=12345, password="validpass123", server=" ")
 
     with pytest.raises(ValueError, match="Authentication failed on server"):
-        await MT5Service._test_broker_connection(login=12345, password="wrong_password", server="ICMarkets-Live")
+        await MT5Service._test_broker_connection(
+            login=12345, password="wrong_password", server="ICMarkets-Live"
+        )
 
 
 @pytest.mark.asyncio
@@ -89,5 +97,3 @@ async def test_broker_connection_success():
     assert equity > 0
     assert currency == "USD"
     assert leverage == 100
-
-
