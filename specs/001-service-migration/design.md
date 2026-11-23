@@ -66,6 +66,12 @@ specs 002–004 build on solid ground instead of on the monolith.
 - Keep existing user accounts (migrate) or start clean? Affects the migration script.
 - Is any production deployment running `dev` today, or is local-only fine during migration?
 
+## 7b. Baseline
+
+`pytest tests/acceptance -rxX` lists what the legacy API does today (passing tests) and every known
+bug (`@known_bug`, 14 at the time of writing). Parity = the new services pass the equivalent of the
+passing tests; done = every `@known_bug` resolved or explicitly dropped.
+
 ## 8. Done when
 
 Compose runs all services; frontend works against the gateway; legacy tests' behaviors are covered by

@@ -38,6 +38,20 @@ async def test_list_items_isolated_by_user():
     assert total == 0
 ```
 
+## Acceptance suite (legacy `app/`)
+
+`tests/acceptance/` exercises the real legacy API end to end against a throwaway MongoDB database
+and a temporary `data/raw/` with only `sample_trades.csv` (real data is never touched).
+
+- Passing tests = behavior that works today.
+- `@known_bug("...")` tests (`xfail(strict=True)`) describe the **correct** behavior the legacy app
+  lacks. When you fix one, it XPASSes and fails the run: remove its `@known_bug` in the same commit.
+- Found a new bug? Add a `@known_bug` test first, then fix it (or leave it documented).
+
+```bash
+pytest tests/acceptance -rxX     # -rxX prints the list of known bugs
+```
+
 ## Commands
 
 ```bash
