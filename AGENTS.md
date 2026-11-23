@@ -57,6 +57,7 @@ uvicorn app.main:app --reload --port 8000                 # legacy API (needs Mo
 uvicorn template_service.main:app --reload --port 8010    # template service
 pytest libs/shared/tests services/_template/tests         # new code
 pytest tests                                              # legacy tests
+pytest tests/acceptance -rxX                              # status report of the legacy API: what works, known bugs (needs local MongoDB)
 ruff check . && ruff format --check .
 git config core.hooksPath .githooks                       # enable pre-push checks
 ```

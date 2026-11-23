@@ -9,6 +9,8 @@
 - `docs/`: architecture, services catalog, ADRs 0001-0003, integrations research log.
 - `specs/`: spec workflow and drafts 001-004 (service migration, MT5 EA bridge, backtest-to-live, AI journal).
 
+- `tests/acceptance/`: end-to-end acceptance suite of the legacy API (28 passing behaviors, 14 known bugs as strict xfail).
+
 ### Removed
 - `docs/project-spec.md`, `docs/tech-spec.md` (folded into `docs/architecture.md` and `.agents/rules/`).
 
