@@ -109,3 +109,27 @@ def test_require_role_allows_matching_role():
         "/admin", headers={"Authorization": f"Bearer {_token(role='admin')}"}
     )
     assert response.status_code == 200
+
+
+@pytest.mark.parametrize("secret", ["", "   "])
+def test_empty_secret_is_rejected(secret):
+    token = jwt.encode({"sub": "u", "email": "e", "role": "admin"}, secret, algorithm="HS256")
+    with pytest.raises(ValueError, match="secret"):
+        decode_access_token(token, secret)
+
+
+def test_empty_secret_in_dependency_returns_500_not_200():
+    app = FastAPI()
+    register_error_handlers(app)
+    get_user = current_user_dependency(lambda: "")
+
+    @app.get("/me")
+    async def me(user: CurrentUser = Depends(get_user)):
+        return {"id": user.id}
+
+    token = jwt.encode({"sub": "u", "email": "e", "role": "admin"}, "", algorithm="HS256")
+    response = TestClient(app, raise_server_exceptions=False).get(
+        "/me", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "INTERNAL_ERROR"

@@ -24,6 +24,9 @@ def _unauthenticated(message: str = "Authentication required") -> AppError:
 
 def decode_access_token(token: str, secret: str) -> CurrentUser:
     """Verify an HS256 access token and return the user it identifies."""
+    if not secret or not secret.strip():
+        # Server misconfiguration, not a client error: fail closed instead of verifying with a blank key.
+        raise ValueError("JWT secret is not configured; refusing to verify tokens")
     try:
         claims = jwt.decode(
             token,
