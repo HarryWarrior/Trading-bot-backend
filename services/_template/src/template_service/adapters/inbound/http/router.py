@@ -10,9 +10,9 @@ from trading_shared.envelope import (
     SuccessResponse,
     build_pagination,
     ok,
-    page_params,
 )
 from trading_shared.errors import AppError
+from trading_shared.http import page_params
 
 router = APIRouter(prefix="/api/v1/template", tags=["template"])
 

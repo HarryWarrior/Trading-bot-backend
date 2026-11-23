@@ -1,8 +1,9 @@
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from trading_shared.envelope import PageParams, page_params
+from trading_shared.envelope import PageParams
 from trading_shared.errors import register_error_handlers
+from trading_shared.http import page_params
 
 
 def _build_app() -> FastAPI:

@@ -9,7 +9,7 @@ applying SOLID, KISS, DRY and YAGNI. Background and diagrams: `docs/architecture
 |---|---|---|
 | `domain/` | Entities, value objects, domain errors, pure domain services | stdlib only (+ `dataclasses`, `decimal`, `datetime`) |
 | `application/ports/` | `Protocol`s for what the application needs (repositories, gateways, clocks) | domain |
-| `application/use_cases/` | One class per use case with an `execute(...)` method | domain, ports, `trading_shared.envelope` models |
+| `application/use_cases/` | One class per use case with an `execute(...)` method | domain, ports, `trading_shared.envelope` models (framework-free; never `trading_shared.http`) |
 | `adapters/inbound/` | HTTP routers, request/response schemas, CLI, message consumers | application, domain, FastAPI, `trading_shared` |
 | `adapters/outbound/` | Port implementations: Mongo, brokers, AI, email, HTTP clients | application ports, domain, drivers/SDKs |
 | `bootstrap.py` | Composition root: builds adapters and injects them into use cases | everything |

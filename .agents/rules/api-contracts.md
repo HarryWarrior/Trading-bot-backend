@@ -37,7 +37,7 @@ async def list_items(params: PageParams = Depends(page_params), ...):
     return ok(Page[ItemOut](items=..., pagination=build_pagination(params.page, params.page_size, total)), version)
 ```
 
-Always `Depends(page_params)` — a bare `Depends()` on `PageParams` does not enforce the limits.
+Always `Depends(page_params)` (from `trading_shared.http`) — a bare `Depends()` on `PageParams` does not enforce the limits.
 `data` is `{ "items": [...], "pagination": { page, page_size, total_items, total_pages, has_next, has_prev } }`.
 
 ## Errors
@@ -47,8 +47,10 @@ Always `Depends(page_params)` — a bare `Depends()` on `PageParams` does not en
 ```
 
 - `code` is UPPER_SNAKE_CASE and stable (clients branch on it); `message` is human-readable English.
-- Raise `AppError(code, message, status_code, details)`; validation errors are rendered automatically
-  as `VALIDATION_ERROR` (422) by `register_error_handlers`.
+- Raise `AppError(code, message, status_code, details)`. `register_error_handlers` renders everything
+  else with the same envelope: validation → 422 `VALIDATION_ERROR` (details without submitted values),
+  `HTTPException`/unknown route → `NOT_FOUND`, `FORBIDDEN`, … (`HTTP_<status>` otherwise), unhandled
+  exception → 500 `INTERNAL_ERROR` (logged, message never leaks internals).
 
 | Status | Use |
 |---|---|

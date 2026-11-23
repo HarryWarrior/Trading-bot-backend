@@ -28,7 +28,7 @@ mv services/mt5-bridge/src/template_service services/mt5-bridge/src/mt5_bridge_s
 6. Install and verify:
 
 ```bash
-pip install -e "services/mt5-bridge[dev]"
+pip install -e "libs/shared[dev]" -e "services/mt5-bridge[dev]"   # trading-shared is not on PyPI
 pytest services/mt5-bridge/tests
 ruff check services/mt5-bridge && ruff format --check services/mt5-bridge
 uvicorn mt5_bridge_service.main:app --port 8011
