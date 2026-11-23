@@ -133,6 +133,20 @@ async def test_password_reset_consume_once_and_expiry(db):
     assert await repo.consume("t1", NOW) is None
 
 
+async def test_password_reset_revoke_all_deletes_only_that_users_tokens(db):
+    repo = MongoPasswordResetRepository(db)
+    await repo.create_indexes()
+    await repo.add("u1", "a", NOW + timedelta(hours=1))
+    await repo.add("u1", "b", NOW + timedelta(hours=1))
+    await repo.add("u2", "c", NOW + timedelta(hours=1))
+    await repo.revoke_all("u1")
+    assert await repo.consume("a", NOW) is None
+    assert await repo.consume("b", NOW) is None
+    assert await repo.consume("c", NOW) == "u2"
+    info = await db["password_resets"].index_information()
+    assert any(v["key"] == [("user_id", 1)] for v in info.values())
+
+
 async def test_indexes_are_created(db):
     for repo, name in (
         (MongoUserRepository(db), "users"),

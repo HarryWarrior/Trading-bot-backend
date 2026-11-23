@@ -195,6 +195,19 @@ async def test_reset_password_changes_hash_revokes_all_sessions_and_is_single_us
     with pytest.raises(InvalidToken):
         await w.reset().execute(token, "Another789!")
     await w.sign_in().execute("user@mail.com", "NewSecret456!")
+    with pytest.raises(InvalidCredentials):
+        await w.sign_in().execute("user@mail.com", "Secret123!")
+
+
+async def test_reset_invalidates_every_outstanding_reset_token(world):
+    w = world
+    await w.registered_verified()
+    await w.forgot().execute("user@mail.com")
+    await w.forgot().execute("user@mail.com")
+    first, second = w.email.resets[-2][1], w.email.resets[-1][1]
+    await w.reset().execute(second, "NewSecret456!")
+    with pytest.raises(InvalidToken):
+        await w.reset().execute(first, "Another789!")
 
 
 async def test_reset_token_expires_after_1_hour(world):

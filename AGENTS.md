@@ -40,7 +40,7 @@ AGENTS.md  CLAUDE.md  GEMINI.md     # agent entry points (the last two point her
 .agents/templates/                  # spec, plan and ADR templates
 services/_template/                 # canonical hexagonal service: COPY THIS for new services
 services/<name>/                    # one folder per service (planned: auth, journal, analytics, mt5-bridge…)
-libs/shared/                        # trading_shared: envelope, errors, settings, logging (cross-cutting only)
+libs/shared/                        # trading_shared: envelope, errors, settings, logging, auth, mongo, request_id (cross-cutting only)
 app/  tests/                        # legacy monolith and its tests (frozen)
 docs/                               # architecture, services catalog, ADRs, integrations research
 specs/NNN-slug/                     # design.md + plan.md per piece of work
@@ -58,8 +58,8 @@ uvicorn template_service.main:app --reload --port 8010    # template service
 cp services/auth/.env.example services/auth/.env         # then set JWT_SECRET_KEY (git-ignored)
 cd services/auth && uvicorn auth_service.main:app --reload --port 8001   # auth service (needs MongoDB)
 powershell -File scripts/dev.ps1                          # dev runner: starts the new services (auth on 8001), not the legacy app
-python services/auth/scripts/migrate_legacy_users.py --help   # copy legacy users into auth_db (run from services/auth)
-python services/auth/scripts/promote_admin.py <email>     # grant admin role (run from services/auth)
+cd services/auth && python scripts/migrate_legacy_users.py --help   # copy legacy users into auth_db (needs the venv active)
+cd services/auth && python scripts/promote_admin.py <email>     # grant admin role (needs the venv active)
 pytest libs/shared/tests services/_template/tests services/auth/tests   # new code (auth integration tests skip without MongoDB)
 pytest tests                                              # legacy tests
 pytest tests/acceptance -rxX                              # status report of the legacy API: what works, known bugs (needs local MongoDB)

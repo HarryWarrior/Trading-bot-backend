@@ -46,3 +46,7 @@ class PasswordResetRepository(Protocol):
     async def consume(self, token_hash: str, now: datetime) -> str | None:
         """Atomically delete a matching, unexpired reset token and return its user id."""
         ...
+
+    async def revoke_all(self, user_id: str) -> None:
+        """Delete every outstanding reset token of the user."""
+        ...

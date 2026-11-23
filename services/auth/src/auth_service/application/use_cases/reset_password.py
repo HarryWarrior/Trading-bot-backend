@@ -34,4 +34,5 @@ class ResetPassword:
         if user_id is None:
             raise InvalidToken("Invalid or expired reset token.")
         await self._users.set_password_hash(user_id, self._hasher.hash(new_password))
+        await self._resets.revoke_all(user_id)
         await self._sessions.revoke_all(user_id)

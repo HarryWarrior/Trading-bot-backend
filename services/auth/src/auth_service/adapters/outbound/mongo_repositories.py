@@ -137,6 +137,7 @@ class MongoPasswordResetRepository:
             self._col,
             [
                 IndexModel([("token_hash", ASCENDING)], unique=True, name="token_hash_unique"),
+                IndexModel([("user_id", ASCENDING)], name="user_id"),
                 _ttl_index(),
             ],
         )
@@ -151,3 +152,6 @@ class MongoPasswordResetRepository:
             {"token_hash": token_hash, "expires_at": {"$gt": now}}
         )
         return None if doc is None else doc["user_id"]
+
+    async def revoke_all(self, user_id: str) -> None:
+        await self._col.delete_many({"user_id": user_id})

@@ -1,8 +1,10 @@
 from typing import Self
 
-from pydantic import SecretStr, model_validator
+from pydantic import SecretStr, field_validator, model_validator
 
 from trading_shared.settings import BaseServiceSettings
+
+MIN_JWT_SECRET_LENGTH = 32
 
 
 class AuthSettings(BaseServiceSettings):
@@ -19,6 +21,15 @@ class AuthSettings(BaseServiceSettings):
     smtp_from_email: str | None = None
     frontend_url: str = "http://localhost:3000"
     cors_origins: list[str] = ["http://localhost:3000"]
+
+    @field_validator("jwt_secret_key")
+    @classmethod
+    def _validate_secret_length(cls, value: SecretStr) -> SecretStr:
+        if len(value.get_secret_value()) < MIN_JWT_SECRET_LENGTH:
+            raise ValueError(
+                f"JWT_SECRET_KEY must be at least {MIN_JWT_SECRET_LENGTH} characters long"
+            )
+        return value
 
     @model_validator(mode="after")
     def _validate_smtp(self) -> Self:

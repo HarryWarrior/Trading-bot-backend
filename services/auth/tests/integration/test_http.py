@@ -93,6 +93,26 @@ def test_container_accepts_injected_sender(settings, sender):
     assert container.settings is settings
 
 
+def test_non_local_environment_without_smtp_and_sender_fails(settings):
+    assert settings.environment == "test" and not settings.smtp_host
+    with pytest.raises(ValueError, match="SMTP_HOST"):
+        build_container(settings)
+
+
+def test_local_environment_without_smtp_uses_log_sender(settings):
+    container = build_container(settings.model_copy(update={"environment": "local"}))
+    container.close()
+
+
+def test_jwt_secret_shorter_than_32_chars_fails_settings():
+    with pytest.raises(ValidationError, match="at least 32"):
+        AuthSettings(_env_file=None, jwt_secret_key="x" * 31)
+
+
+def test_jwt_secret_of_32_chars_is_valid():
+    assert AuthSettings(_env_file=None, jwt_secret_key="x" * 32).jwt_secret_key
+
+
 def test_full_flow(client, sender):
     response = _sign_up(client)
     assert response.status_code == 201
@@ -280,11 +300,20 @@ def test_mixed_case_email_still_works(client, sender):
 
 def test_smtp_host_without_from_email_fails_settings():
     with pytest.raises(ValidationError):
-        AuthSettings(_env_file=None, jwt_secret_key="x", smtp_host="smtp.example.com")
+        AuthSettings(
+            _env_file=None,
+            jwt_secret_key="test-secret-key-with-enough-length-0123456789",
+            smtp_host="smtp.example.com",
+        )
 
 
 def test_smtp_user_and_password_must_come_together():
-    base = {"_env_file": None, "jwt_secret_key": "x", "smtp_host": "h", "smtp_from_email": "a@b.co"}
+    base = {
+        "_env_file": None,
+        "jwt_secret_key": "test-secret-key-with-enough-length-0123456789",
+        "smtp_host": "h",
+        "smtp_from_email": "a@b.co",
+    }
     with pytest.raises(ValidationError):
         AuthSettings(**base, smtp_user="u")
     with pytest.raises(ValidationError):
@@ -318,14 +347,18 @@ def test_request_id_header_is_echoed(client):
 
 def test_prod_without_smtp_fails_settings():
     with pytest.raises(ValidationError):
-        AuthSettings(_env_file=None, environment="prod", jwt_secret_key="x")
+        AuthSettings(
+            _env_file=None,
+            environment="prod",
+            jwt_secret_key="test-secret-key-with-enough-length-0123456789",
+        )
 
 
 def test_prod_with_smtp_is_valid():
     settings = AuthSettings(
         _env_file=None,
         environment="prod",
-        jwt_secret_key="x",
+        jwt_secret_key="test-secret-key-with-enough-length-0123456789",
         smtp_host="smtp.example.com",
         smtp_from_email="no-reply@example.com",
     )

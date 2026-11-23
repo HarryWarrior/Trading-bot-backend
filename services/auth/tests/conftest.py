@@ -104,6 +104,9 @@ class FakePasswordResetRepository:
             return None
         return entry[0]
 
+    async def revoke_all(self, user_id: str) -> None:
+        self.tokens = {h: v for h, v in self.tokens.items() if v[0] != user_id}
+
 
 class FakePasswordHasher:
     def hash(self, password: str) -> str:

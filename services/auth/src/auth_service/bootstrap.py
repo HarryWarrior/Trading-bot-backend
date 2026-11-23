@@ -68,8 +68,11 @@ def _default_email_sender(settings: AuthSettings) -> EmailSender:
             from_email=settings.smtp_from_email or "",
             frontend_url=settings.frontend_url,
         )
-    if settings.environment == "prod":
-        raise ValueError("SMTP_HOST is required when ENVIRONMENT=prod")
+    if settings.environment != "local":
+        raise ValueError(
+            f"SMTP_HOST is required when ENVIRONMENT={settings.environment}; "
+            "emails are only logged when ENVIRONMENT=local"
+        )
     return LogEmailSender(logger, settings.frontend_url)
 
 
