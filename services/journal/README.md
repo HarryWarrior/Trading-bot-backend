@@ -49,6 +49,7 @@ Money fields are rounded to 2 decimals in responses; prices and volume are not.
 - Malformed rows are skipped and reported in `skipped_rows` (row number and reason); a file with no
   recognizable table is rejected with `UNREADABLE_REPORT`.
 - The same file (SHA-256) uploaded twice by the same user is rejected as a duplicate.
+- The 10 MB cap bounds parsing only; deploy behind a proxy or ASGI body-size limit.
 
 **Times are taken as UTC** until MT5 account linking (plan 3) provides the broker's UTC offset.
 

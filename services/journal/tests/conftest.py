@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+
+# starlette 0.27 imports the legacy `multipart` alias, which python-multipart >= 0.0.13 flags.
+# Import it once here with the warning silenced so `-W error` does not trip on it later.
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", PendingDeprecationWarning)
+    import multipart  # noqa: F401
 
 from journal_service.application.ports.parsing import ParsedReport, ParsedTrade
 from journal_service.application.ports.repositories import AccountSummary, TradeFilters
