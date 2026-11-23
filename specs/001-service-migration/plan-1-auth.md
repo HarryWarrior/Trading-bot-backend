@@ -142,3 +142,20 @@
 - [ ] **Step 2:** `ruff check libs services tests && ruff format --check libs services tests` → clean.
 - [ ] **Step 3:** `scripts/dev.ps1` then sign-up/verify/sign-in with curl against :8001; code appears only in the console.
 - [ ] **Step 4:** Commit `docs(auth): document auth service and dev runner`
+
+## Execution notes (plan 1 done, 2026-11-23)
+
+Executed subagent-driven; every task reviewed; final whole-branch review clean after one fix wave.
+
+**Carried to plan 4 (hardening before exposure beyond localhost):**
+- bcrypt hashing/verification and SMTP run on the event loop → make the ports async (`asyncio.to_thread`).
+- Rate limiting: sign-in, verification-code attempts (6-digit code is brute-forceable within 15 min without it), resend/forgot (email bombing).
+- SMTP: timeout; implicit TLS (port 465) support.
+- Remaining enumeration signals: SMTP failure → 500 only for known emails; sign-in timing for unknown emails.
+
+**Small follow-ups (any later plan):** `get_me` returns `INVALID_TOKEN` for a deleted user (vs `UNAUTHENTICATED`);
+`import_legacy_users` uses the wall clock instead of the `Clock` port; migration source==target guard does not normalize
+host aliases/ports; scripts require `JWT_SECRET_KEY` via `AuthSettings`; OpenAPI security scheme and `WWW-Authenticate`
+header; `allow_credentials` unnecessary for Bearer; X-Request-ID length/charset limit; missing migration tests (default
+source URL, missing `created_at`, case-duplicate source emails); test hygiene (alg-none test isolation, index assertions,
+hard-coded test Mongo URL).
