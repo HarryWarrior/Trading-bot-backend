@@ -22,7 +22,7 @@ or by an AI agent).
 | Code layout | Legacy FastAPI monolith in `app/` | One service per tool in `services/<name>/` |
 | Trades storage | Latest file in `data/raw/` (single-user) | `journal` service, MongoDB, per `user_id` |
 | MT5 | Manual CSV/XLSX upload; partly simulated sync | EA bridge pushes executions (spec 002) |
-| Auth | `app/` sessions + JWT | `auth` service issues JWT, services verify locally (spec 001) |
+| Auth | `auth` service (port 8001, in progress); legacy `app/` still serves 8000 | `auth` service issues JWT, services verify locally (spec 001) |
 
 **`app/` is frozen legacy.** Only fix bugs there. New features go into services.
 Migration is spec 001.
@@ -52,10 +52,15 @@ scripts/  .githooks/                # changelog script, pre-push hook
 ```bash
 python -m venv .venv && .venv\Scripts\activate          # Windows (source .venv/bin/activate elsewhere)
 pip install -r requirements.txt                           # legacy app
-pip install -e "libs/shared[dev]" -e "services/_template[dev]" ruff
+pip install -e "libs/shared[dev]" -e "services/_template[dev]" -e "services/auth[dev]" ruff
 uvicorn app.main:app --reload --port 8000                 # legacy API (needs MongoDB on localhost:27017)
 uvicorn template_service.main:app --reload --port 8010    # template service
-pytest libs/shared/tests services/_template/tests         # new code
+cp services/auth/.env.example services/auth/.env         # then set JWT_SECRET_KEY (git-ignored)
+cd services/auth && uvicorn auth_service.main:app --reload --port 8001   # auth service (needs MongoDB)
+powershell -File scripts/dev.ps1                          # dev runner: starts the new services (auth on 8001), not the legacy app
+python services/auth/scripts/migrate_legacy_users.py --help   # copy legacy users into auth_db (run from services/auth)
+python services/auth/scripts/promote_admin.py <email>     # grant admin role (run from services/auth)
+pytest libs/shared/tests services/_template/tests services/auth/tests   # new code (auth integration tests skip without MongoDB)
 pytest tests                                              # legacy tests
 pytest tests/acceptance -rxX                              # status report of the legacy API: what works, known bugs (needs local MongoDB)
 ruff check . && ruff format --check .

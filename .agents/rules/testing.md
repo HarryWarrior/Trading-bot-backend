@@ -41,7 +41,7 @@ async def test_list_items_isolated_by_user():
 ## Acceptance suite (legacy `app/`)
 
 `tests/acceptance/` exercises the real legacy API end to end against a throwaway MongoDB database
-and a temporary `data/raw/` with only `sample_trades.csv` (real data is never touched).
+and a temporary `data/raw/` seeded from `data/samples/sample_trades.csv` (example data; real reports live in git-ignored `data/private/` and are never touched).
 
 - Passing tests = behavior that works today.
 - `@known_bug("...")` tests (`xfail(strict=True)`) describe the **correct** behavior the legacy app

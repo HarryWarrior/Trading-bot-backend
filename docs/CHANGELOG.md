@@ -11,6 +11,15 @@
 
 - `tests/acceptance/`: end-to-end acceptance suite of the legacy API (28 passing behaviors, 14 known bugs as strict xfail).
 
+- `libs/shared`: `trading_shared.auth` (local JWT verification, `require_role`), `trading_shared.mongo` (Motor client, idempotent indexes) and `trading_shared.request_id` (`X-Request-ID` middleware).
+- `services/auth` (port 8001, `auth_db`): sign-up with email code, sign-in, rotating refresh tokens, sign-out, password reset, roles; codes are only logged locally when no SMTP is set.
+- `services/auth/scripts/migrate_legacy_users.py` and `promote_admin.py`.
+- `scripts/dev.ps1`: dev runner for the new services (auth for now).
+
+### Changed
+- Sample data moved to `data/samples/`; real reports go in git-ignored `data/private/`.
+- `scripts/inspect_excel.py` takes the report path as an argument.
+
 ### Removed
 - `docs/project-spec.md`, `docs/tech-spec.md` (folded into `docs/architecture.md` and `.agents/rules/`).
 
