@@ -3,10 +3,21 @@
 from __future__ import annotations
 
 import csv
+import sys
+import warnings
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
+
+sys.path.insert(0, str(Path(__file__).parent / "unit"))
+
+# starlette 0.27 imports the legacy `multipart` alias, which python-multipart >= 0.0.13 flags
+# (installed through the journal test dependency). Import it once with the warning silenced.
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", PendingDeprecationWarning)
+    import multipart  # noqa: F401
+
 from builders import utc
 
 from analytics_service.domain.dataset import Dataset, TradeRecord

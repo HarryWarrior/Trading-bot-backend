@@ -35,3 +35,11 @@ docstring-code-format = true
 
 [tool.ruff.lint.isort]
 known-first-party = ["app", "trading_shared", "template_service", "auth_service", "journal_service", "analytics_service"]
+
+[tool.pytest.ini_options]
+# Root runs (`pytest services libs/shared/tests tests`) need async tests to run without per-service config.
+asyncio_mode = "auto"
+addopts = "--import-mode=importlib -m 'not private'"
+markers = [
+    "private: reads real broker reports from data/private (never committed); run with -m private",
+]

@@ -17,3 +17,15 @@ def test_domain_and_application_have_no_framework_imports():
                 if module.split(".")[0] in FORBIDDEN:
                     offenders.append(f"{source.relative_to(PACKAGE_ROOT)} imports {module}")
     assert offenders == []
+
+
+def test_production_code_never_imports_the_journal_package():
+    offenders = [
+        str(source.relative_to(PACKAGE_ROOT))
+        for source in PACKAGE_ROOT.rglob("*.py")
+        if any(
+            module.split(".")[0] == "journal_service"
+            for module in IMPORT_PATTERN.findall(source.read_text(encoding="utf-8"))
+        )
+    ]
+    assert offenders == []

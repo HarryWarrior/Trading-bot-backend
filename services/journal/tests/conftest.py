@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import sys
 import warnings
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
+
+# Keep the helper modules importable when this suite runs under another service pytest config
+# (e.g. `pytest services/analytics/tests services/journal/tests`).
+sys.path.insert(0, str(Path(__file__).parent / "unit"))
 
 # starlette 0.27 imports the legacy `multipart` alias, which python-multipart >= 0.0.13 flags.
 # Import it once here with the warning silenced so `-W error` does not trip on it later.
