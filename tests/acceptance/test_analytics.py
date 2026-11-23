@@ -1,4 +1,4 @@
-"""Acceptance: analytics over the sample report (`data/raw/sample_trades.csv`).
+"""Acceptance: analytics over the sample report (`data/samples/sample_trades.csv`).
 
 Expected values were computed by hand from the 10 sample trades:
 gross profit 1750, gross loss 300, equity 200→250→100→…→1450 (peak 250, trough 100).
@@ -11,7 +11,7 @@ import pytest
 from tests.acceptance.conftest import known_bug
 
 API = "/api/v1/analytics"
-SAMPLE = Path(__file__).resolve().parents[2] / "data" / "raw" / "sample_trades.csv"
+SAMPLE = Path(__file__).resolve().parents[2] / "data" / "samples" / "sample_trades.csv"
 
 
 @pytest.fixture()

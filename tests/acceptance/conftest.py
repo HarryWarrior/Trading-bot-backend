@@ -22,7 +22,7 @@ from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SAMPLE_REPORT = REPO_ROOT / "data" / "raw" / "sample_trades.csv"
+SAMPLE_REPORT = REPO_ROOT / "data" / "samples" / "sample_trades.csv"
 MONGO_URL = "mongodb://localhost:27017"
 PASSWORD = "AcceptancePass123!"
 

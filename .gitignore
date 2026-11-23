@@ -11,3 +11,7 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+
+# Real data never goes in git
+data/raw/
+data/private/
