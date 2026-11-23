@@ -160,23 +160,51 @@ class BadValue(ValueError):
     """A cell could not be converted."""
 
 
+def _is_grouped(text: str, sep: str) -> bool:
+    return re.fullmatch(r"\d{1,3}(?:" + re.escape(sep) + r"\d{3})+", text) is not None
+
+
+def _locale_text(raw: str, value: Any) -> str:
+    """Normalize a locale-formatted number to plain ``-1234.56`` text, or raise ``BadValue``.
+
+    Whitespace/NBSP are thousands separators. With both "." and "," the last one is the decimal
+    separator and the other must be valid grouping. A lone "," followed by exactly three digits
+    is ambiguous ("1,234" vs "1,234 as decimal") and is never guessed.
+    """
+    text = re.sub(r"\s+", "", raw.replace(" ", " "))
+    sign = ""
+    if text[:1] in "+-":
+        sign, text = text[0], text[1:]
+    if not re.fullmatch(r"[\d.,]+", text):
+        return sign + text  # let Decimal decide (e.g. exponent notation) or reject
+    bad = BadValue(f"not a number: {str(value)[:30]!r}")
+    if "," in text and "." in text:
+        decimal_sep = "," if text.rfind(",") > text.rfind(".") else "."
+        group_sep = "." if decimal_sep == "," else ","
+        integer, _, fraction = text.rpartition(decimal_sep)
+        if not (integer.isdigit() or _is_grouped(integer, group_sep)):
+            raise bad
+        return f"{sign}{integer.replace(group_sep, '')}.{fraction}"
+    if "," in text:
+        if text.count(",") > 1:
+            if not _is_grouped(text, ","):
+                raise bad
+            return sign + text.replace(",", "")
+        integer, _, fraction = text.partition(",")
+        if len(fraction) == 3:
+            raise BadValue(f"ambiguous number format: {str(value)[:30]}")
+        return f"{sign}{integer}.{fraction}"
+    return sign + text
+
+
 def to_decimal(value: Any, label: str) -> Decimal:
     if isinstance(value, bool) or is_blank(value):
         raise BadValue(f"{label} is missing")
-    if isinstance(value, int | float):
-        text = repr(value)
-    else:
-        text = re.sub(r"\s+", "", str(value).replace("\xa0", " "))
-        if "," in text and "." in text:
-            text = text.replace(",", "")
-        elif "," in text:
-            text = (
-                text.replace(",", "")
-                if re.fullmatch(r"-?\d{1,3}(,\d{3})+", text)
-                else text.replace(",", ".")
-            )
     try:
+        text = repr(value) if isinstance(value, int | float) else _locale_text(str(value), value)
         number = Decimal(text)
+    except BadValue as exc:
+        raise BadValue(f"{label}: {exc}" if "ambiguous" not in str(exc) else str(exc)) from None
     except InvalidOperation:
         raise BadValue(f"{label} is not a number: {str(value)[:30]!r}") from None
     if not number.is_finite():
@@ -270,10 +298,20 @@ def parse_trade_row(row: Row, mapping: dict[str, int], row_number: int) -> Parse
     )
 
 
-def is_table_end(row: Row) -> bool:
-    """A blank row or a lone section label ("Orders", "Deals", ...) ends a table."""
+SECTION_LABELS = {
+    "positions", "orders", "deals", "results", "open positions", "working orders", "summary",
+    "posiciones", "ordenes", "transacciones", "operaciones", "resultados", "posiciones abiertas",
+}  # fmt: skip
+
+
+def is_blank_row(row: Row) -> bool:
+    return all(is_blank(v) for v in row)
+
+
+def is_section_label(row: Row) -> bool:
+    """A lone section label ("Orders", "Deals", ...) ends a table; blank rows never do."""
     filled = [v for v in row if not is_blank(v)]
-    return len(filled) <= 1
+    return len(filled) == 1 and normalize(filled[0]) in SECTION_LABELS
 
 
 def read_trade_table(
@@ -283,12 +321,17 @@ def read_trade_table(
     skipped: list[SkippedRow] = []
     row_number = 0
     for row in rows[header_index + 1 :]:
-        no_time_or_symbol = is_blank(cell(row, mapping, "open_time")) and is_blank(
-            cell(row, mapping, "symbol")
-        )
-        if is_table_end(row) or no_time_or_symbol:
-            break  # blank row, section label or totals row
+        if is_blank_row(row):
+            continue  # blank rows inside a table are skipped, never a reason to stop
+        if is_section_label(row):
+            break
         row_number += 1
+        if is_blank(cell(row, mapping, "open_time")) and is_blank(cell(row, mapping, "symbol")):
+            if is_blank(cell(row, mapping, "type")):
+                row_number -= 1
+                continue  # totals line (only commission/swap/profit filled)
+            skipped.append(SkippedRow(row_number, "time and symbol are missing"))
+            continue
         result = parse_trade_row(row, mapping, row_number)
         if isinstance(result, SkippedRow):
             skipped.append(result)

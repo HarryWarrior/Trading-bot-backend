@@ -200,3 +200,89 @@ def test_unrecognized_file_raises_unreadable_report(parser, content):
 def test_dispatcher_with_no_parsers_raises_unrecognized_format():
     with pytest.raises(UnreadableReport, match="unrecognized format"):
         DispatchingReportParser([]).parse("a.csv", b"x")
+
+
+def _flat_with_number(column_value: str, column: str = "volume"):
+    base = {"volume": "1", "open": "1.1", "close": "1.2", "profit": "10"}
+    base[column] = f'"{column_value}"'
+    return (
+        FLAT_HEADER
+        + f"2025-03-01 10:00:00,2025-03-01 11:00:00,EURUSD,BUY,{base['volume']},"
+        + f"{base['open']},{base['close']},{base['profit']},\n"
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("1,234.56", "1234.56"),
+        ("1.234,56", "1234.56"),
+        ("1,5", "1.5"),
+        ("12,34", "12.34"),
+        ("1,234,567.8", "1234567.8"),
+        ("3 328.61", "3328.61"),
+        ("- 30.12", "-30.12"),
+        ("3\u00a0328,61", "3328.61"),
+    ],
+)
+def test_locale_numbers_are_parsed_exactly(parser, text, expected):
+    report = parser.parse("n.csv", csv_bytes(_flat_with_number(text, "profit")))
+
+    assert [t.profit for t in report.trades] == [Decimal(expected)]
+
+
+@pytest.mark.parametrize("text", ["0,001", "1,234", "150,123"])
+def test_ambiguous_numbers_are_skipped_never_guessed(parser, text):
+    report = parser.parse("n.csv", csv_bytes(_flat_with_number(text)))
+
+    assert report.trades == []
+    assert report.skipped_rows[0].reason == f"ambiguous number format: {text}"
+
+
+def test_invalid_grouping_is_unparseable(parser):
+    report = parser.parse("n.csv", csv_bytes(_flat_with_number("1.2,3,4", "profit")))
+
+    assert report.trades == []
+    assert len(report.skipped_rows) == 1
+
+
+def test_blank_line_inside_flat_table_does_not_drop_later_trades(parser):
+    rows = [
+        f"2025-03-0{d} 10:00:00,2025-03-0{d} 11:00:00,EURUSD,BUY,1,1.1,1.2,{d},\n"
+        for d in range(1, 10)
+    ]
+    text = (
+        FLAT_HEADER
+        + "".join(rows[:5])
+        + "\n"
+        + "".join(rows[5:])
+        + ("2025-03-10 10:00:00,2025-03-10 11:00:00,EURUSD,BUY,1,1.1,1.2,10,\n")
+    )
+
+    report = parser.parse("gap.csv", csv_bytes(text))
+
+    assert len(report.trades) == 10
+    assert report.skipped_rows == []
+
+
+def test_unparseable_balance_rows_are_reported_not_dropped(parser):
+    deals = [
+        balance_deal("2026.01.20 08:00:00", "1", "10 000.00", "10 000.00"),
+        balance_deal("2026.01.21 08:00:00", "2", "abc", "0"),
+        balance_deal("not a time", "3", "5.00", "0"),
+        balance_deal("2026.01.22 08:00:00", "", "5.00", "0"),
+        balance_deal("2026.01.23 08:00:00", "5", "0.00", "0"),
+    ]
+
+    report = parser.parse("r.xlsx", build_mt5_xlsx(deals=deals))
+
+    assert [e.source_ref for e in report.balance_events] == ["1"]
+    assert len(report.skipped_rows) == 3  # zero-amount row is ignored on purpose
+    assert all("balance row" in s.reason for s in report.skipped_rows)
+
+
+def test_xlsx_bytes_with_csv_filename_are_parsed(parser):
+    report = parser.parse("renamed.csv", build_mt5_xlsx())
+
+    assert len(report.trades) == 3
+    assert report.account is not None

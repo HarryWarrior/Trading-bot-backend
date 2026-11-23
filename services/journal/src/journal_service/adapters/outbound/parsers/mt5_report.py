@@ -12,7 +12,8 @@ from journal_service.adapters.outbound.parsers._table import (
     clean_text,
     find_trade_header,
     is_blank,
-    is_table_end,
+    is_blank_row,
+    is_section_label,
     is_xlsx,
     map_columns,
     normalize,
@@ -27,6 +28,7 @@ from journal_service.application.ports.parsing import (
     ReportAccount,
 )
 from journal_service.domain.errors import UnreadableReport
+from journal_service.domain.report_import import SkippedRow
 
 POSITIONS_LABELS = {"positions", "posiciones"}
 DEALS_LABELS = {"deals", "transacciones", "operaciones"}
@@ -74,42 +76,52 @@ class Mt5ReportParser:
         if header is None:
             raise UnreadableReport("the Positions section has no recognizable header row")
         trades, skipped = read_trade_table(rows, *header)
+        events, balance_skipped = self._balance_events(rows)
         return ParsedReport(
             account=_account(rows, positions_at),
             trades=trades,
-            balance_events=self._balance_events(rows),
-            skipped_rows=skipped,
+            balance_events=events,
+            skipped_rows=skipped + balance_skipped,
         )
 
     @staticmethod
-    def _balance_events(rows: list[Row]) -> list[ParsedBalanceEvent]:
+    def _balance_events(rows: list[Row]) -> tuple[list[ParsedBalanceEvent], list[SkippedRow]]:
         deals_at = _section_start(rows, DEALS_LABELS)
         if deals_at is None:
-            return []
+            return [], []
         needed = {"open_time", "deal", "type", "profit"}
         header_index = next(
             (i for i in range(deals_at + 1, len(rows)) if needed <= map_columns(rows[i]).keys()),
             None,
         )
         if header_index is None:
-            return []
+            return [], []
         mapping = map_columns(rows[header_index])
         events: list[ParsedBalanceEvent] = []
+        skipped: list[SkippedRow] = []
+        deal_row = 0
         for row in rows[header_index + 1 :]:
-            if is_table_end(row):
+            if is_blank_row(row):
+                continue
+            if is_section_label(row):
                 break
+            deal_row += 1
             type_cell = cell(row, mapping, "type")
             kind_word = "" if is_blank(type_cell) else normalize(type_cell)
             if kind_word not in BALANCE_WORDS | CREDIT_WORDS:
-                continue
+                continue  # trade deals are covered by the Positions section
             ticket = clean_text(cell(row, mapping, "deal"))
             try:
+                if ticket is None:
+                    raise BadValue("deal ticket is missing")
                 amount = to_decimal(cell(row, mapping, "profit"), "amount")
                 time = to_time(cell(row, mapping, "open_time"), "time")
-            except BadValue:
+            except BadValue as exc:
+                # Dropping it silently would change the balance used for drawdown.
+                skipped.append(SkippedRow(deal_row, f"balance row in Deals section: {exc}"))
                 continue
-            if ticket is None or amount == Decimal(0):
-                continue
+            if amount == Decimal(0):
+                continue  # zero-amount balance rows carry no information; ignored on purpose
             if kind_word in CREDIT_WORDS:
                 kind = "credit"
             else:
@@ -123,4 +135,4 @@ class Mt5ReportParser:
                     comment=clean_text(cell(row, mapping, "comment")),
                 )
             )
-        return events
+        return events, skipped
