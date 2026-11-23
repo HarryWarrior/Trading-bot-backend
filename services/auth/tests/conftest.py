@@ -168,11 +168,15 @@ class World:
             self.users, self.verifications, self.secrets, self.email, self.clock
         )
 
-    def sign_in(self):
-        return SignIn(self.users, self.sessions, self.hasher, self.issuer, self.secrets, self.clock)
+    def sign_in(self, **kwargs):
+        return SignIn(
+            self.users, self.sessions, self.hasher, self.issuer, self.secrets, self.clock, **kwargs
+        )
 
-    def refresh(self):
-        return RefreshSession(self.users, self.sessions, self.issuer, self.secrets, self.clock)
+    def refresh(self, **kwargs):
+        return RefreshSession(
+            self.users, self.sessions, self.issuer, self.secrets, self.clock, **kwargs
+        )
 
     def sign_out(self):
         return SignOut(self.sessions)

@@ -52,6 +52,7 @@ def settings(database_name) -> AuthSettings:
         mongodb_url=MONGO_URL,
         database_name=database_name,
         jwt_secret_key="test-secret-key-with-enough-length-0123456789",
+        refresh_token_days=1,
     )
 
 
@@ -253,6 +254,44 @@ def test_cleanup_as_admin_returns_deleted_count(client, sender, settings):
     assert response.json()["data"]["deleted"] == 0
 
 
+def test_session_expiry_follows_refresh_token_days(client, sender, settings):
+    from datetime import UTC, datetime, timedelta
+
+    _verified_sign_in(client, sender)
+    sync_client = MongoClient(MONGO_URL, tz_aware=True)
+    try:
+        session = sync_client[settings.database_name]["sessions"].find_one()
+    finally:
+        sync_client.close()
+    remaining = session["expires_at"] - datetime.now(UTC)
+    assert timedelta(hours=23) < remaining <= timedelta(days=1)
+
+
+def test_invalid_email_is_422(client):
+    response = _sign_up(client, email="not-an-email")
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_mixed_case_email_still_works(client, sender):
+    assert _sign_up(client, email="Mixed.Case@Mail.COM").status_code == 201
+    assert sender.verifications[-1][0] == "mixed.case@mail.com"
+
+
+def test_smtp_host_without_from_email_fails_settings():
+    with pytest.raises(ValidationError):
+        AuthSettings(_env_file=None, jwt_secret_key="x", smtp_host="smtp.example.com")
+
+
+def test_smtp_user_and_password_must_come_together():
+    base = {"_env_file": None, "jwt_secret_key": "x", "smtp_host": "h", "smtp_from_email": "a@b.co"}
+    with pytest.raises(ValidationError):
+        AuthSettings(**base, smtp_user="u")
+    with pytest.raises(ValidationError):
+        AuthSettings(**base, smtp_password="p")
+    assert AuthSettings(**base, smtp_user="u", smtp_password="p").smtp_user == "u"
+
+
 def test_password_shorter_than_8_is_422(client):
     response = _sign_up(client, password="short")
     assert response.status_code == 422
@@ -284,6 +323,10 @@ def test_prod_without_smtp_fails_settings():
 
 def test_prod_with_smtp_is_valid():
     settings = AuthSettings(
-        _env_file=None, environment="prod", jwt_secret_key="x", smtp_host="smtp.example.com"
+        _env_file=None,
+        environment="prod",
+        jwt_secret_key="x",
+        smtp_host="smtp.example.com",
+        smtp_from_email="no-reply@example.com",
     )
     assert settings.smtp_host == "smtp.example.com"

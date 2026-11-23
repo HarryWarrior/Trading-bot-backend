@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from auth_service.application.ports.clock import Clock
 from auth_service.application.ports.repositories import SessionRepository, UserRepository
 from auth_service.application.ports.security import (
@@ -7,7 +9,7 @@ from auth_service.application.ports.security import (
 )
 from auth_service.application.use_cases.session_issue import open_session
 from auth_service.domain.errors import EmailNotVerified, InvalidCredentials
-from auth_service.domain.tokens import AuthTokens
+from auth_service.domain.tokens import REFRESH_TOKEN_TTL, AuthTokens
 from auth_service.domain.user import normalize_email
 
 
@@ -20,6 +22,7 @@ class SignIn:
         issuer: AccessTokenIssuer,
         secrets: SecretGenerator,
         clock: Clock,
+        refresh_ttl: timedelta = REFRESH_TOKEN_TTL,
     ) -> None:
         self._users = users
         self._sessions = sessions
@@ -27,6 +30,7 @@ class SignIn:
         self._issuer = issuer
         self._secrets = secrets
         self._clock = clock
+        self._refresh_ttl = refresh_ttl
 
     async def execute(self, email: str, password: str) -> AuthTokens:
         """Authenticate and open a session.
@@ -40,4 +44,6 @@ class SignIn:
             raise InvalidCredentials("Invalid email or password.")
         if not user.email_verified:
             raise EmailNotVerified("Email is not verified.")
-        return await open_session(user, self._sessions, self._issuer, self._secrets, self._clock)
+        return await open_session(
+            user, self._sessions, self._issuer, self._secrets, self._clock, self._refresh_ttl
+        )

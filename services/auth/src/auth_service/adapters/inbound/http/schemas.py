@@ -1,20 +1,16 @@
-import re
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, Field
+from pydantic import AfterValidator, BaseModel, BeforeValidator, EmailStr, Field
 
 from auth_service.domain.tokens import AuthTokens
 from auth_service.domain.user import User
 
 MAX_PASSWORD_BYTES = 72  # bcrypt silently ignores anything beyond this
-_EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
-def _check_email(value: str) -> str:
-    if not _EMAIL_PATTERN.match(value.strip()):
-        raise ValueError("Enter a valid email address")
-    return value
+def _strip(value: object) -> object:
+    return value.strip() if isinstance(value, str) else value
 
 
 def _check_new_password(value: str) -> str:
@@ -25,7 +21,7 @@ def _check_new_password(value: str) -> str:
     return value
 
 
-Email = Annotated[str, Field(max_length=254), AfterValidator(_check_email)]
+Email = Annotated[EmailStr, BeforeValidator(_strip), Field(max_length=254)]
 NewPassword = Annotated[str, AfterValidator(_check_new_password)]
 
 

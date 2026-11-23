@@ -2,6 +2,7 @@
 
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 
 from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -64,7 +65,7 @@ def _default_email_sender(settings: AuthSettings) -> EmailSender:
             port=settings.smtp_port,
             user=settings.smtp_user or "",
             password=settings.smtp_password.get_secret_value() if settings.smtp_password else "",
-            from_email=settings.smtp_from_email or "no-reply@localhost",
+            from_email=settings.smtp_from_email or "",
             frontend_url=settings.frontend_url,
         )
     if settings.environment == "prod":
@@ -85,6 +86,7 @@ def build_container(settings: AuthSettings, email_sender: EmailSender | None = N
     )
     secrets = SecretsGenerator()
     clock = SystemClock()
+    refresh_ttl = timedelta(days=settings.refresh_token_days)
     sender = email_sender or _default_email_sender(settings)
     return Container(
         settings=settings,
@@ -93,8 +95,8 @@ def build_container(settings: AuthSettings, email_sender: EmailSender | None = N
         sign_up=SignUp(users, verifications, hasher, secrets, sender, clock),
         verify_email=VerifyEmail(users, verifications, clock),
         resend_verification=ResendVerification(users, verifications, secrets, sender, clock),
-        sign_in=SignIn(users, sessions, hasher, issuer, secrets, clock),
-        refresh_session=RefreshSession(users, sessions, issuer, secrets, clock),
+        sign_in=SignIn(users, sessions, hasher, issuer, secrets, clock, refresh_ttl),
+        refresh_session=RefreshSession(users, sessions, issuer, secrets, clock, refresh_ttl),
         sign_out=SignOut(sessions),
         forgot_password=ForgotPassword(users, resets, secrets, sender, clock),
         reset_password=ResetPassword(users, resets, sessions, hasher, clock),
