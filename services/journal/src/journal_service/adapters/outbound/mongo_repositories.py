@@ -84,6 +84,8 @@ class MongoTradeRepository:
     async def upsert_many(self, user_id: str, trades: list[Trade]) -> tuple[int, int]:
         if any(t.user_id != user_id for t in trades):
             raise ValueError("every trade must belong to the given user_id")
+        if any(t.position_id is None and t.row_hash is None for t in trades):
+            raise ValueError("every trade needs a position_id or row_hash")
         if not trades:
             return 0, 0
         now = datetime.now(UTC)

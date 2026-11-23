@@ -324,3 +324,9 @@ async def test_duplicate_import_maps_to_domain_error(db):
     with pytest.raises(DuplicateImport) as exc:
         await repo.add(_import(id="i-new", filename="copy.csv"))
     assert exc.value.import_id == "i1"
+
+
+async def test_upsert_rejects_trade_without_natural_key(trades, make_trade):
+    keyless = make_trade(position_id=None, row_hash=None)
+    with pytest.raises(ValueError, match="position_id or row_hash"):
+        await trades.upsert_many("u1", [keyless])
