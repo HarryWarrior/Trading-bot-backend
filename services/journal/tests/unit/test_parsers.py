@@ -3,7 +3,13 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from report_builders import balance_deal, build_flat_xlsx, build_mt5_xlsx, csv_bytes
+from report_builders import (
+    balance_deal,
+    build_flat_xlsx,
+    build_mt5_xlsx,
+    csv_bytes,
+    money_deal,
+)
 
 from journal_service.adapters.outbound.parsers.dispatcher import DispatchingReportParser
 from journal_service.adapters.outbound.parsers.encoding import decode_text
@@ -62,6 +68,70 @@ def test_mt5_credit_rows_become_credit_events(parser):
     report = parser.parse("r.xlsx", build_mt5_xlsx(deals=deals))
 
     assert [(e.kind, e.amount) for e in report.balance_events] == [("credit", Decimal("250.00"))]
+
+
+def test_mt5_adjustment_deals_become_signed_adjustment_events(parser):
+    deals = [
+        balance_deal("2026.01.20 08:00:00", "1", "1 000.00", "1 000.00"),
+        money_deal("2026.01.21 08:00:00", "2", "correction", profit="25.00"),
+        money_deal("2026.01.21 09:00:00", "3", "charge", profit="-10.00"),
+        money_deal("2026.01.21 10:00:00", "4", "commission daily", commission="-3.50"),
+        money_deal("2026.01.21 11:00:00", "5", "bonus", profit="100.00", comment="Promo"),
+        money_deal("2026.01.21 12:00:00", "6", "interest", profit="1.00", swap="-0.25"),
+        money_deal("2026.01.21 13:00:00", "7", "dividend", profit="0.00"),
+        money_deal("2026.01.21 14:00:00", "8", "tax", fee="-2.00"),
+        ["2026.01.22 15:55:08", "9", "XAUUSD", "buy", "in", "0.06", "4 800.50", "9", "-1.20",
+         "0", "0", "0.00", "", ""],
+    ]  # fmt: skip
+
+    report = parser.parse("r.xlsx", build_mt5_xlsx(deals=deals))
+
+    assert [(e.kind, e.amount, e.source_ref) for e in report.balance_events] == [
+        ("deposit", Decimal("1000.00"), "1"),
+        ("adjustment", Decimal("25.00"), "2"),
+        ("adjustment", Decimal("-10.00"), "3"),
+        ("adjustment", Decimal("-3.50"), "4"),
+        ("adjustment", Decimal("100.00"), "5"),
+        ("adjustment", Decimal("0.75"), "6"),
+        ("adjustment", Decimal("-2.00"), "8"),
+    ]  # zero-amount dividend ignored; the buy deal is covered by Positions
+    assert report.balance_events[4].comment == "Promo"
+    assert report.skipped_rows == []
+
+
+def test_mt5_spanish_adjustment_deals(parser):
+    deals = [
+        money_deal("2026.01.21 08:00:00", "2", "Corrección", profit="5.00"),
+        money_deal("2026.01.21 09:00:00", "3", "Comisión", commission="-1.00"),
+    ]
+
+    report = parser.parse("r.xlsx", build_mt5_xlsx(deals=deals))
+
+    assert [(e.kind, e.amount) for e in report.balance_events] == [
+        ("adjustment", Decimal("5.00")),
+        ("adjustment", Decimal("-1.00")),
+    ]
+
+
+def test_mt5_unknown_non_trade_deal_type_is_reported(parser):
+    deals = [money_deal("2026.01.21 08:00:00", "2", "Mystery Thing", profit="5.00")]
+
+    report = parser.parse("r.xlsx", build_mt5_xlsx(deals=deals))
+
+    assert report.balance_events == []
+    assert [s.reason for s in report.skipped_rows] == [
+        "unsupported balance deal type 'Mystery Thing'"
+    ]
+
+
+def test_mt5_adjustment_without_any_amount_is_reported(parser):
+    deals = [money_deal("2026.01.21 08:00:00", "2", "correction")]
+
+    report = parser.parse("r.xlsx", build_mt5_xlsx(deals=deals))
+
+    assert report.balance_events == []
+    assert len(report.skipped_rows) == 1
+    assert "amount is missing" in report.skipped_rows[0].reason
 
 
 def test_mt5_report_without_account_line_has_no_account(parser):

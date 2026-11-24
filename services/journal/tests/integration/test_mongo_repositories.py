@@ -285,6 +285,14 @@ async def test_balance_upsert_and_ownership(db):
         await repo.upsert_many("u2", [_event()])
 
 
+async def test_adjustment_event_round_trips(db):
+    repo = MongoBalanceRepository(db)
+    await repo.create_indexes()
+    await repo.upsert_many("u1", [_event(kind="adjustment", amount=Decimal("-3.50"))])
+    (got,) = await repo.all_for("u1", None)
+    assert (got.kind, got.amount) == ("adjustment", Decimal("-3.50"))
+
+
 def _import(**kw) -> ReportImport:
     base = {
         "id": "i1",

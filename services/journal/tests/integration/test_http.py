@@ -318,6 +318,26 @@ def test_ingest_twice_then_dataset(client):
     assert other == {"trades": [], "balance_events": []}
 
 
+def test_ingest_accepts_adjustment_events(client):
+    headers = auth("alice")
+    body = ingest_body()
+    body["balance_events"].append(
+        {
+            "kind": "adjustment",
+            "amount": -3.5,
+            "time": "2026-01-01T12:00:00Z",
+            "source_ref": "b2",
+        }
+    )
+    response = client.post(f"{BASE}/ingest/mt5", json=body, headers=headers)
+    assert response.status_code == 200
+    dataset = client.get(f"{BASE}/dataset", headers=headers).json()["data"]
+    assert [(e["kind"], e["amount"]) for e in dataset["balance_events"]] == [
+        ("deposit", 1000.0),
+        ("adjustment", -3.5),
+    ]
+
+
 def test_ingest_rejects_naive_times(client):
     body = ingest_body()
     body["trades"][0]["open_time"] = "2026-01-01T08:00:00"

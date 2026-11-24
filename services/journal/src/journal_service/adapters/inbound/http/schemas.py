@@ -9,7 +9,7 @@ from typing import Literal
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from journal_service.application.ports.repositories import AccountSummary
-from journal_service.domain.balance import BalanceEvent
+from journal_service.domain.balance import BalanceEvent, BalanceKind
 from journal_service.domain.report_import import ReportImport
 from journal_service.domain.trade import Trade
 
@@ -179,7 +179,7 @@ class IngestTradeIn(BaseModel):
 
 
 class IngestBalanceEventIn(BaseModel):
-    kind: Literal["deposit", "withdrawal", "credit"]
+    kind: BalanceKind
     amount: Decimal
     time: AwareDatetime
     source_ref: str = Field(min_length=1)

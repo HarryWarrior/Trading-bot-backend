@@ -33,6 +33,20 @@ def balance_deal(time: str, ticket: str, amount: str, balance: str, kind="balanc
     return [time, ticket, "", kind, "", "", "", "", "", "", "", amount, balance, comment]
 
 
+def money_deal(
+    time: str,
+    ticket: str,
+    kind: str,
+    profit="",
+    commission="",
+    fee="",
+    swap="",
+    comment="",
+):
+    """A non-trade Deals row whose amount may sit in any of the money columns."""
+    return [time, ticket, "", kind, "", "", "", "", commission, fee, swap, profit, "", comment]
+
+
 DEFAULT_DEALS: list[Sequence] = [
     balance_deal("2026.01.20 08:00:00", "1", "10 000.00", "10 000.00", comment="Initial deposit"),
     balance_deal("2026.01.25 08:00:00", "2", "-500.00", "9 500.00", comment="Withdrawal"),

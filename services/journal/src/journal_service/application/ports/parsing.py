@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal, Protocol
+from typing import Protocol
 
+from journal_service.domain.balance import BalanceKind
 from journal_service.domain.report_import import SkippedRow
 from journal_service.domain.trade import Side
 
@@ -34,7 +35,7 @@ class ParsedTrade:
 
 @dataclass(frozen=True)
 class ParsedBalanceEvent:
-    kind: Literal["deposit", "withdrawal", "credit"]
+    kind: BalanceKind
     amount: Decimal
     time: datetime
     source_ref: str

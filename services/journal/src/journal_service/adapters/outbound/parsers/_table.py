@@ -44,6 +44,7 @@ ALIASES = {
     "pnl": "profit", "profit_usd": "profit",
     "commission": "commission", "comision": "commission",
     "swap": "swap",
+    "fee": "fee", "tarifa": "fee",
     "s / l": "stop_loss", "sl": "stop_loss", "s/l": "stop_loss",
     "t / p": "take_profit", "tp": "take_profit", "t/p": "take_profit",
     "comment": "comment", "comentario": "comment", "comente": "comment",

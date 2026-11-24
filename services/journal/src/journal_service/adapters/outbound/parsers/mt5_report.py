@@ -20,6 +20,7 @@ from journal_service.adapters.outbound.parsers._table import (
     read_trade_table,
     read_xlsx_rows,
     to_decimal,
+    to_optional_decimal,
     to_time,
 )
 from journal_service.application.ports.parsing import (
@@ -36,6 +37,19 @@ ACCOUNT_LABELS = {"account:", "cuenta:"}
 ACCOUNT_PATTERN = re.compile(r"^\s*(\d+)\s*\(([^,)]*),\s*([^,)]*)")
 BALANCE_WORDS = {"balance", "saldo"}
 CREDIT_WORDS = {"credit", "credito"}
+# Trade deals are covered by the Positions section and ignored here.
+TRADE_DEAL_WORDS = {
+    "buy", "sell", "compra", "venta", "buy canceled", "sell canceled",
+    "compra cancelada", "venta cancelada",
+}  # fmt: skip
+# Non-trade deals that change the balance (first word of the type, accents stripped), e.g.
+# "correction", "charge", "bonus", "commission daily", "interest", "dividend franked", "tax".
+ADJUSTMENT_WORDS = {
+    "correction", "charge", "bonus", "commission", "fee", "interest", "dividend", "tax",
+    "correccion", "cargo", "bono", "bonificacion", "comision", "tarifa", "interes",
+    "dividendo", "impuesto",
+}  # fmt: skip
+ADJUSTMENT_AMOUNT_COLUMNS = ("profit", "commission", "fee", "swap")
 
 
 def _section_start(rows: list[Row], labels: set[str]) -> int | None:
@@ -56,6 +70,19 @@ def _account(rows: list[Row], limit: int) -> ReportAccount | None:
                 login, currency, server = (g.strip() for g in match.groups())
                 return ReportAccount(login=login, server=server, currency=currency or None)
     return None
+
+
+def _adjustment_amount(row: Row, mapping: dict[str, int]) -> Decimal:
+    """Profit + Commission + Fee + Swap: brokers put the amount of a commission, fee or
+    interest deal in different columns. Blank cells count as 0; all blank is an error."""
+    values = [
+        to_optional_decimal(cell(row, mapping, column), column)
+        for column in ADJUSTMENT_AMOUNT_COLUMNS
+    ]
+    present = [v for v in values if v is not None]
+    if not present:
+        raise BadValue("amount is missing")
+    return sum(present, Decimal(0))
 
 
 class Mt5ReportParser:
@@ -107,14 +134,27 @@ class Mt5ReportParser:
                 break
             deal_row += 1
             type_cell = cell(row, mapping, "type")
-            kind_word = "" if is_blank(type_cell) else normalize(type_cell)
-            if kind_word not in BALANCE_WORDS | CREDIT_WORDS:
+            if is_blank(type_cell):
+                continue  # totals line: no deal type, no information of its own
+            kind_word = normalize(type_cell)
+            if kind_word in TRADE_DEAL_WORDS:
                 continue  # trade deals are covered by the Positions section
+            is_adjustment = kind_word.split(" ")[0] in ADJUSTMENT_WORDS
+            if not is_adjustment and kind_word not in BALANCE_WORDS | CREDIT_WORDS:
+                # Dropping it silently would change the balance used for drawdown.
+                skipped.append(
+                    SkippedRow(deal_row, f"unsupported balance deal type '{clean_text(type_cell)}'")
+                )
+                continue
             ticket = clean_text(cell(row, mapping, "deal"))
             try:
                 if ticket is None:
                     raise BadValue("deal ticket is missing")
-                amount = to_decimal(cell(row, mapping, "profit"), "amount")
+                amount = (
+                    _adjustment_amount(row, mapping)
+                    if is_adjustment
+                    else to_decimal(cell(row, mapping, "profit"), "amount")
+                )
                 time = to_time(cell(row, mapping, "open_time"), "time")
             except BadValue as exc:
                 # Dropping it silently would change the balance used for drawdown.
@@ -122,7 +162,9 @@ class Mt5ReportParser:
                 continue
             if amount == Decimal(0):
                 continue  # zero-amount balance rows carry no information; ignored on purpose
-            if kind_word in CREDIT_WORDS:
+            if is_adjustment:
+                kind = "adjustment"
+            elif kind_word in CREDIT_WORDS:
                 kind = "credit"
             else:
                 kind = "deposit" if amount > 0 else "withdrawal"
