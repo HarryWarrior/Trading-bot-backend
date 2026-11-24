@@ -1,8 +1,16 @@
 """
-Automated Changelog Updater and Version Manager for Trading Bot Backend API.
+Changelog / version guard for the Trading Bot backend.
 
-This script updates docs/CHANGELOG.md with new version entries,
-categories (Added, Changed, Fixed, Security), and ensures version synchronization across the repository.
+Single version source: the root ``VERSION`` file (the version being prepared).
+
+``--check-only`` (pre-push hook) passes when ``docs/CHANGELOG.md`` has either
+  * a ``## [<VERSION>]`` section, or
+  * a non-empty ``## [Unreleased]`` section;
+otherwise it fails (changes were made without a changelog entry).
+
+``--bump [patch|minor|major]`` (or ``--version X.Y.Z``) moves the ``[Unreleased]`` content into a
+new ``## [X.Y.Z] - <date>`` section, leaves an empty ``[Unreleased]`` and writes ``VERSION``.
+``--message`` first adds a bullet to ``[Unreleased]``.
 """
 
 import argparse
@@ -11,181 +19,97 @@ import re
 import sys
 from pathlib import Path
 
+UNRELEASED = "## [Unreleased]"
+SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 
-def get_current_app_version(backend_root: Path) -> str:
-    """Extract the latest released version string from docs/CHANGELOG.md."""
-    changelog = backend_root / "docs" / "CHANGELOG.md"
-    if not changelog.exists():
-        return "2.0.0"
 
-    content = changelog.read_text(encoding="utf-8")
-    match = re.search(r"^## \[([0-9]+\.[0-9]+\.[0-9]+)\]", content, re.MULTILINE)
-    return match.group(1) if match else "2.0.0"
+def read_version(root: Path) -> str:
+    version_file = root / "VERSION"
+    if not version_file.exists():
+        raise SystemExit("VERSION file is missing (expected X.Y.Z in the repo root).")
+    version = version_file.read_text(encoding="utf-8").strip()
+    if not SEMVER.match(version):
+        raise SystemExit(f"VERSION must look like X.Y.Z, got {version!r}.")
+    return version
 
 
 def bump_semver(version: str, bump_type: str = "patch") -> str:
-    """Bump semantic version (major, minor, or patch)."""
-    parts = version.split(".")
-    major = int(parts[0])
-    minor = int(parts[1]) if len(parts) > 1 else 0
-    patch = int(parts[2]) if len(parts) > 2 else 0
-
+    major, minor, patch = (int(p) for p in version.split("."))
     if bump_type == "major":
         return f"{major + 1}.0.0"
-    elif bump_type == "minor":
+    if bump_type == "minor":
         return f"{major}.{minor + 1}.0"
-    else:
-        return f"{major}.{minor}.{patch + 1}"
+    return f"{major}.{minor}.{patch + 1}"
 
 
-def format_changelog_entry(version: str, date_str: str, changes: dict[str, list[str]]) -> str:
-    """Format a standard markdown changelog release block."""
-    lines = [f"## [{version}] - {date_str}"]
-
-    category_emojis = {
-        "Added": "✨ Added",
-        "Changed": "🔧 Changed",
-        "Fixed": "🐛 Fixed",
-        "Security": "🔒 Security",
-        "Removed": "🗑️ Removed",
-    }
-
-    for cat, items in changes.items():
-        if items:
-            emoji_title = category_emojis.get(cat, f"📌 {cat}")
-            lines.append(f"\n### {emoji_title}")
-            for item in items:
-                lines.append(f"- {item}")
-
-    lines.append("\n---\n")
-    return "\n".join(lines)
+def split_unreleased(content: str) -> tuple[str, str, str]:
+    """Return (before, unreleased_body, after); body excludes the heading."""
+    start = content.find(UNRELEASED)
+    if start == -1:
+        return content, "", ""
+    body_start = start + len(UNRELEASED)
+    nxt = re.search(r"^## \[", content[body_start:], re.MULTILINE)
+    body_end = body_start + nxt.start() if nxt else len(content)
+    return content[:start], content[body_start:body_end], content[body_end:]
 
 
-def prepend_to_changelog(file_path: Path, entry_content: str):
-    """Prepend a new release entry right after the top header of a changelog file."""
-    if not file_path.exists():
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_text(f"# Changelog\n\n{entry_content}\n", encoding="utf-8")
-        print(f"✅ Created {file_path.name} with new version entry.")
-        return
-
-    content = file_path.read_text(encoding="utf-8")
-
-    # Locate where to insert (after main # Changelog title)
-    header_match = re.search(r"^(#\s+[^\n]+\n+)", content)
-    if header_match:
-        header = header_match.group(1)
-        rest = content[len(header) :]
-        new_content = f"{header}{entry_content}\n{rest}"
-    else:
-        new_content = f"# Changelog\n\n{entry_content}\n{content}"
-
-    file_path.write_text(new_content, encoding="utf-8")
-    print(f"✅ Updated {file_path}")
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="Update docs/CHANGELOG.md and bump project version."
-    )
-    parser.add_argument("--version", type=str, help="Explicit version (e.g. 2.1.0)")
-    parser.add_argument(
-        "--bump",
-        choices=["patch", "minor", "major"],
-        default="patch",
-        help="Semantic version bump type (default: patch)",
-    )
-    parser.add_argument(
-        "--added",
-        nargs="*",
-        default=[],
-        help="List of newly added features",
-    )
-    parser.add_argument(
-        "--changed",
-        nargs="*",
-        default=[],
-        help="List of changed features",
-    )
-    parser.add_argument(
-        "--fixed",
-        nargs="*",
-        default=[],
-        help="List of bug fixes",
-    )
-    parser.add_argument(
-        "--security",
-        nargs="*",
-        default=[],
-        help="List of security improvements",
-    )
-    parser.add_argument(
-        "--message",
-        type=str,
-        help="Quick single message to add under Added",
-    )
-    parser.add_argument(
-        "--check-only",
-        action="store_true",
-        help="Verify if docs/CHANGELOG.md has an entry for current version",
+def check(root: Path) -> tuple[bool, str]:
+    version = read_version(root)
+    changelog = root / "docs" / "CHANGELOG.md"
+    if not changelog.exists():
+        return False, "docs/CHANGELOG.md does not exist."
+    content = changelog.read_text(encoding="utf-8")
+    if re.search(rf"^## \[{re.escape(version)}\]", content, re.MULTILINE):
+        return True, f"docs/CHANGELOG.md has a section for [{version}]."
+    _, body, _ = split_unreleased(content)
+    if body.strip():
+        return True, f"docs/CHANGELOG.md has [Unreleased] entries (VERSION is {version})."
+    return False, (
+        f"docs/CHANGELOG.md has no [{version}] section and [Unreleased] is empty. "
+        "Add an entry under [Unreleased] (or run with --bump)."
     )
 
-    args = parser.parse_args()
-    backend_root = Path(__file__).resolve().parent.parent
-    docs_changelog = backend_root / "docs" / "CHANGELOG.md"
 
-    current_version = get_current_app_version(backend_root)
+def bump(root: Path, version: str | None, bump_type: str, message: str | None) -> str:
+    current = read_version(root)
+    target = version or bump_semver(current, bump_type)
+    if not SEMVER.match(target):
+        raise SystemExit(f"Version must look like X.Y.Z, got {target!r}.")
+    changelog = root / "docs" / "CHANGELOG.md"
+    content = changelog.read_text(encoding="utf-8")
+    if UNRELEASED not in content:
+        raise SystemExit("docs/CHANGELOG.md has no [Unreleased] section.")
+    before, body, after = split_unreleased(content)
+    if message:
+        body = "\n\n- " + message + "\n" + body.lstrip("\n")
+    if not body.strip():
+        raise SystemExit("Nothing to release: [Unreleased] is empty (use --message).")
+    release = f"## [{target}] - {datetime.date.today().isoformat()}\n{body.rstrip()}\n\n---\n\n"
+    changelog.write_text(f"{before}{UNRELEASED}\n\n{release}{after.lstrip()}", encoding="utf-8")
+    (root / "VERSION").write_text(f"{target}\n", encoding="utf-8")
+    return target
 
-    # Check only mode (used by git hooks to ensure changelog is updated)
-    if args.check_only:
-        if not docs_changelog.exists():
-            print("⚠️ docs/CHANGELOG.md does not exist.")
-            sys.exit(1)
 
-        content = docs_changelog.read_text(encoding="utf-8")
-        if f"[{current_version}]" not in content:
-            print(
-                f"⚠️ docs/CHANGELOG.md is missing an entry for current version [{current_version}]."
-            )
-            print("💡 Run 'python scripts/update_changelog.py --message \"...\"' to add it.")
-            sys.exit(1)
-        else:
-            print(f"✅ docs/CHANGELOG.md is up to date with version [{current_version}].")
-            sys.exit(0)
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Changelog / VERSION guard and release helper.")
+    parser.add_argument("--check-only", action="store_true", help="verify the changelog rule")
+    parser.add_argument("--bump", choices=["patch", "minor", "major"], help="release Unreleased")
+    parser.add_argument("--version", help="explicit release version X.Y.Z (implies release)")
+    parser.add_argument("--message", help="bullet to add to [Unreleased] before releasing")
+    args = parser.parse_args(argv)
+    root = Path(__file__).resolve().parent.parent
 
-    # Determine target version
-    if args.version:
-        target_version = args.version
-    else:
-        target_version = bump_semver(current_version, args.bump)
+    if args.check_only or not (args.bump or args.version):
+        ok, msg = check(root)
+        print(("OK: " if ok else "FAIL: ") + msg)
+        return 0 if ok else 1
 
-    # Collect changes
-    changes = {
-        "Added": list(args.added),
-        "Changed": list(args.changed),
-        "Fixed": list(args.fixed),
-        "Security": list(args.security),
-    }
-
-    if args.message:
-        changes["Added"].append(args.message)
-
-    # If no changes provided, provide default placeholder
-    if not any(changes.values()):
-        changes["Added"].append("Automated update and performance improvements")
-
-    today_str = datetime.date.today().isoformat()
-    entry = format_changelog_entry(target_version, today_str, changes)
-
-    # Update docs/CHANGELOG.md
-    prepend_to_changelog(docs_changelog, entry)
-
-    print(f"\n🎉 Successfully created release [{target_version}] in docs/CHANGELOG.md.")
+    target = bump(root, args.version, args.bump or "patch", args.message)
+    print(f"Released [{target}]; VERSION updated.")
+    return 0
 
 
 if __name__ == "__main__":
-    import sys
-
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    main()
+    sys.exit(main())
