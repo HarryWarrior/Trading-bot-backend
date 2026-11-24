@@ -113,3 +113,22 @@
 - [ ] **Step 2:** `ruff check libs services tests && ruff format --check libs services tests` clean.
 - [ ] **Step 3:** Smoke with `scripts/dev.ps1`: sign up + verify + sign in on auth (code from console), upload `data/samples/sample_trades.csv` to journal, `GET /api/v1/analytics/summary` → net_profit 1450.00, win_rate 70.00; stop services; remove the throwaway user and its journal data by exact ids.
 - [ ] **Step 4:** Commit `docs: document journal and analytics services`
+
+## Execution notes (plan 2 done)
+
+Executed subagent-driven; every task reviewed; final whole-branch review → one fix wave (I1–I4, absolute row numbers,
+balance upsert count, legacy python-multipart) plus an addendum for a regression it introduced (MT5 account-summary block)
+and a stricter drawdown-% rule. Real local MT5 reports: all six parse with 0 skipped rows.
+
+**Carried to plan 4 (hardening before exposure beyond localhost):** fastapi 0.104 / starlette 0.27 upload DoS CVEs
+(CVE-2024-47874, CVE-2025-54121) → upgrade or proxy body-size limit; upload body spooled before cap/auth; openpyxl
+decompression-bomb limits.
+
+**Carried to plan 3 (MT5 sync):** `/ingest/mt5` should be restricted to the mt5 service/role; IngestRequest list bounds and
+`gt=0` on volume/prices; ordered bulk_write partial apply on concurrent duplicates; broker server time offset for report
+times; MT5 CSV/HTML exports currently fall back to the flat parser.
+
+**Small follow-ups:** `ending_balance` can be negative; trades imported before the `upload` ruling keep `upload:<id>`
+(local data only); EU "1.234" with a lone dot is read as a decimal; `profit_min/max` and `sort_by=profit` act on net
+(document or rename); `created_at` uses the wall clock; no indexes for open_time/symbol/net sorts; dev.ps1 ignores
+`export KEY=` / inline `#` dotenv forms; analytics creates an AsyncClient per request.

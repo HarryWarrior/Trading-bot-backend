@@ -189,7 +189,7 @@ real candles or an empty state; no `Math.random` anywhere.
    `null` or a value in [-100, 0]. "Green" = all rewritten tests pass.
 2. **Balance and KPI scope:** `journal` stores `BalanceEvent`s (deposit, withdrawal, credit; from MT5
    balance deals, or from report rows when present). Every trade and event carries `account_ref`
-   (MT5 `login@server`, or `upload:<import id>`). Analytics accepts `account_ref` (default: all of the
+   (MT5 `login@server`, or `upload` for flat files — one stable per-user ref so overlapping re-imports never duplicate; changed from `upload:<import id>` by plan 2 final-review ruling). Analytics accepts `account_ref` (default: all of the
    user's data). Starting balance = sum of balance events before the first trade of the scope; if
    none, drawdown % is `null`. Uploads do not ask for a manual balance (YAGNI).
 3. **Same trade via two routes:** natural key is (`user_id`, `account_ref`, `position_id`) whenever a

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed (plan 2 final review)
+- analytics: withdrawals/adjustments shift the equity peak (only trades create drawdown); starting balance, ending balance and drawdown % are `null` unless every traded account in scope has balance data, and drawdown % is `null` if equity ever goes below 0.
+- journal: MT5 correction/charge/bonus/commission-type deals become signed `adjustment` balance events; unknown deal types are reported in `skipped_rows`; the account-summary block after Deals is ignored; skipped rows report absolute file/sheet row numbers; flat-file uploads share the stable account ref `upload` (overlapping re-imports never duplicate).
+- root `requirements.txt` (legacy app): `python-multipart` 0.0.6 → 0.0.20.
+
 ### Added
 - `AGENTS.md`, `.agents/rules/` and `.agents/templates/`: single source of rules for AI agents (replaces `.gemini/rules`).
 - `libs/shared` (`trading_shared`): response envelope, pagination (`page_params`), error envelope, settings, logging.
