@@ -73,7 +73,9 @@ def build_container(
         link_account=LinkAccount(terminal, accounts, clock, UuidIdGenerator()),
         list_accounts=ListAccounts(accounts),
         get_status=GetStatus(terminal, accounts, clock),
-        sync_account=SyncAccount(terminal, journal, accounts, clock, offset),
+        sync_account=SyncAccount(
+            terminal, journal, accounts, clock, offset, settings.server_timezone
+        ),
         unlink_account=UnlinkAccount(accounts),
-        get_rates=GetRates(terminal, clock, offset),
+        get_rates=GetRates(terminal, clock, offset, settings.server_timezone),
     )

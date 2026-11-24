@@ -267,3 +267,13 @@ def test_health(client):
 def test_offset_is_read_from_the_prefixed_env_var(monkeypatch):
     monkeypatch.setenv("MT5_SERVER_UTC_OFFSET_MINUTES", "120")
     assert make_settings().server_utc_offset_minutes == 120
+
+
+def test_server_timezone_is_validated_and_read_from_env(monkeypatch):
+    assert make_settings().server_timezone is None
+    assert make_settings(server_timezone="Europe/Athens").server_timezone == "Europe/Athens"
+    assert make_settings(server_timezone="").server_timezone is None
+    with pytest.raises(ValueError, match="MT5_SERVER_TIMEZONE"):
+        make_settings(server_timezone="Mars/Olympus")
+    monkeypatch.setenv("MT5_SERVER_TIMEZONE", "Europe/Athens")
+    assert make_settings().server_timezone == "Europe/Athens"

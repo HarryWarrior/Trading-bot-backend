@@ -15,7 +15,7 @@ from decimal import Decimal
 from typing import Any, Literal
 
 from mt5_service.domain.deals import Deal, DealEntry, DealType
-from mt5_service.domain.time import to_utc
+from mt5_service.domain.time import TimeConverter, as_converter
 
 BalanceKind = Literal["deposit", "withdrawal", "credit", "adjustment"]
 
@@ -91,8 +91,8 @@ class BuildResult:
     skipped_positions: list[tuple[str, str]] = field(default_factory=list)  # (position_id, reason)
 
 
-def _balance_event(deal: Deal, offset: timedelta) -> BalanceEventOut | None:
-    time = to_utc(deal.time_server, offset)
+def _balance_event(deal: Deal, converter: TimeConverter) -> BalanceEventOut | None:
+    time = converter.to_utc(deal.time_server)
     comment = deal.comment or None
     if deal.type is DealType.BALANCE:
         if deal.profit == 0:
@@ -118,7 +118,7 @@ def _weighted_price(deals: list[Deal]) -> Decimal:
 
 
 def _build_position(
-    position_id: int, deals: list[Deal], offset: timedelta
+    position_id: int, deals: list[Deal], converter: TimeConverter
 ) -> TradeOut | str | None:
     """Returns a trade, a skip reason (str) or None when the position is still open."""
     for d in deals:
@@ -144,8 +144,8 @@ def _build_position(
         symbol=first.symbol,
         side="buy" if first.type is DealType.BUY else "sell",
         volume=entry_volume,
-        open_time=to_utc(first.time_server, offset),
-        close_time=to_utc(exits[-1].time_server, offset),
+        open_time=converter.to_utc(first.time_server),
+        close_time=converter.to_utc(exits[-1].time_server),
         open_price=_weighted_price(entries),
         close_price=_weighted_price(exits),
         commission=sum((d.commission + d.fee for d in deals), Decimal(0)),
@@ -155,7 +155,8 @@ def _build_position(
     )
 
 
-def build_trades(deals: list[Deal], offset: timedelta) -> BuildResult:
+def build_trades(deals: list[Deal], offset: timedelta | TimeConverter) -> BuildResult:
+    converter = as_converter(offset)
     ordered = sorted(deals, key=lambda d: (d.time_server, d.ticket))
     positions: dict[int, list[Deal]] = {}
     balance_events: list[BalanceEventOut] = []
@@ -165,7 +166,7 @@ def build_trades(deals: list[Deal], offset: timedelta) -> BuildResult:
         if deal.type in _TRADE_TYPES:
             positions.setdefault(deal.position_id, []).append(deal)
         else:
-            event = _balance_event(deal, offset)
+            event = _balance_event(deal, converter)
             if event is not None:
                 balance_events.append(event)
 
@@ -173,7 +174,7 @@ def build_trades(deals: list[Deal], offset: timedelta) -> BuildResult:
     skipped: list[tuple[str, str]] = []
     open_positions = 0
     for position_id, group in positions.items():
-        built = _build_position(position_id, group, offset)
+        built = _build_position(position_id, group, converter)
         if built is None:
             open_positions += 1
         elif isinstance(built, str):

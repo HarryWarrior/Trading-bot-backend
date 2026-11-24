@@ -27,6 +27,16 @@ class MultipleTerminals(DomainError):
         super().__init__("More than one MetaTrader 5 terminal is running; keep only one open")
 
 
+class ServerTimezoneMismatch(DomainError):
+    """The configured MT5_SERVER_TIMEZONE contradicts the terminal's live server time."""
+
+    code = "SERVER_TIMEZONE_MISMATCH"
+    http_status = 409
+
+    def __init__(self) -> None:
+        super().__init__("The configured MT5_SERVER_TIMEZONE does not match the terminal")
+
+
 class TerminalAccountMismatch(DomainError):
     code = "TERMINAL_ACCOUNT_MISMATCH"
     http_status = 409
