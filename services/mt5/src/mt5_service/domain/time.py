@@ -5,6 +5,7 @@ measured from the latest tick (server time) against the real UTC clock and round
 30 minutes (real broker offsets are whole or half hours).
 """
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
@@ -76,24 +77,58 @@ class FixedOffsetConverter:
         return to_utc(server_time, self.offset)
 
 
+_SHIFT_SPEC = re.compile(
+    r"^(?P<zone>\S+?)(?P<sign>[+-])(?P<hours>\d{1,2})(?::(?P<minutes>\d{2}))?$"
+)
+_MAX_SHIFT = timedelta(hours=14)
+
+
+def _load_zone(name: str) -> ZoneInfo:
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError, OSError):
+        raise ValueError(f"unknown time zone {name!r}") from None
+
+
+def _parse_zone_spec(spec: str) -> tuple[ZoneInfo, timedelta]:
+    """``<IANA zone>`` or ``<IANA zone>+-H[:MM]``: server time = zone local time + shift."""
+    try:
+        return _load_zone(spec), timedelta(0)  # also IANA names that contain a sign (Etc/GMT+5)
+    except ValueError:
+        pass
+    match = _SHIFT_SPEC.match(spec)
+    if match is None:
+        raise ValueError(
+            f"invalid time zone {spec!r}; use e.g. Europe/Athens or America/New_York+7"
+        )
+    minutes = int(match["minutes"] or 0)
+    shift = timedelta(hours=int(match["hours"]), minutes=minutes)
+    if minutes >= 60 or shift > _MAX_SHIFT:  # noqa: PLR2004
+        raise ValueError(f"invalid time zone shift in {spec!r}")
+    return _load_zone(match["zone"]), -shift if match["sign"] == "-" else shift
+
+
 class ZoneConverter:
     """Converts each timestamp with the offset an IANA zone had AT THAT MOMENT (DST aware).
+
+    The spec is ``<IANA zone>`` (server clock follows that zone's DST rule, e.g. ``Europe/Athens``
+    for EU-rule brokers) or ``<IANA zone>+-H[:MM]`` (server clock = that zone's local time shifted,
+    e.g. ``America/New_York+7`` for brokers whose day closes at New York 17:00: GMT+2 in winter,
+    GMT+3 in summer, switching on US DST dates).
 
     Needs no market data, so it also works on weekends. A wall-clock time that happens twice (DST
     fall-back) or never (spring-forward) is resolved with ``fold=0``: the first occurrence / the
     offset in force before the jump.
     """
 
-    def __init__(self, zone_name: str) -> None:
-        try:
-            self._zone = ZoneInfo(zone_name)
-        except (ZoneInfoNotFoundError, ValueError, OSError) as exc:
-            raise ValueError(f"unknown time zone {zone_name!r}") from exc
+    def __init__(self, zone_spec: str) -> None:
+        self._zone, self._shift = _parse_zone_spec(zone_spec)
 
     def to_utc(self, server_time: datetime) -> datetime:
         if server_time.tzinfo is not None:
             raise ValueError("server_time must be naive (broker server time)")
-        return server_time.replace(tzinfo=self._zone, fold=0).astimezone(UTC)
+        local = server_time - self._shift  # server clock -> wall clock of the zone
+        return local.replace(tzinfo=self._zone, fold=0).astimezone(UTC)
 
     def verify_against_tick(self, tick_time_server: datetime, utc_now: datetime) -> None:
         """Rejects a zone that contradicts the live tick.
@@ -103,7 +138,7 @@ class ZoneConverter:
         that is too far ahead of the real broker time cannot be told apart from a stale tick.
         """
         now = utc_now.astimezone(UTC)
-        zone_offset = now.astimezone(self._zone).utcoffset() or timedelta(0)
+        zone_offset = (now.astimezone(self._zone).utcoffset() or timedelta(0)) + self._shift
         if server_offset_raw(tick_time_server, utc_now) - zone_offset > _MAX_RESIDUAL:
             raise ServerTimezoneMismatch
 

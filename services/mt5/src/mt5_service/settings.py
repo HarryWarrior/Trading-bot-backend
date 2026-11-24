@@ -1,7 +1,6 @@
-from zoneinfo import ZoneInfo
-
 from pydantic import AliasChoices, Field, SecretStr, field_validator
 
+from mt5_service.domain.time import ZoneConverter
 from trading_shared.settings import BaseServiceSettings
 
 MIN_JWT_SECRET_LENGTH = 32
@@ -25,8 +24,9 @@ class Mt5Settings(BaseServiceSettings):
         default=None,
         validation_alias=AliasChoices("MT5_SERVER_UTC_OFFSET_MINUTES", "server_utc_offset_minutes"),
     )
-    # IANA zone of the broker server clock (e.g. Europe/Athens for EET brokers such as FTMO).
-    # Recommended: DST aware and independent of fresh ticks. Wins over the fixed offset above.
+    # Broker server clock as an IANA zone, optionally shifted: "Europe/Athens" (EU DST rule) or
+    # "America/New_York+7" (US DST rule, New York close; FTMO and many others). Confirm your
+    # broker's rule. DST aware, independent of fresh ticks; wins over the fixed offset above.
     server_timezone: str | None = Field(
         default=None,
         validation_alias=AliasChoices("MT5_SERVER_TIMEZONE", "server_timezone"),
@@ -67,9 +67,10 @@ class Mt5Settings(BaseServiceSettings):
         if value is None or not value.strip():
             return None
         try:
-            ZoneInfo(value.strip())
-        except (KeyError, ValueError, OSError):
+            ZoneConverter(value.strip())
+        except ValueError as exc:
             raise ValueError(
-                "MT5_SERVER_TIMEZONE must be an IANA time zone, e.g. Europe/Athens"
+                "MT5_SERVER_TIMEZONE must be an IANA zone with an optional shift, e.g. "
+                f"Europe/Athens or America/New_York+7 ({exc})"
             ) from None
         return value.strip()

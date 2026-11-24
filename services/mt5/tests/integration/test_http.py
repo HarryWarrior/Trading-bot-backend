@@ -277,3 +277,11 @@ def test_server_timezone_is_validated_and_read_from_env(monkeypatch):
         make_settings(server_timezone="Mars/Olympus")
     monkeypatch.setenv("MT5_SERVER_TIMEZONE", "Europe/Athens")
     assert make_settings().server_timezone == "Europe/Athens"
+
+
+def test_server_timezone_accepts_a_shifted_zone():
+    assert (
+        make_settings(server_timezone="America/New_York+7").server_timezone == "America/New_York+7"
+    )
+    with pytest.raises(ValueError, match="MT5_SERVER_TIMEZONE"):
+        make_settings(server_timezone="America/New_York+99")

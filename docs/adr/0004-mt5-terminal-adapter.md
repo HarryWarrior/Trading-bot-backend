@@ -32,8 +32,9 @@ multi-user, hosted use and becomes a second adapter in spec 002.
 - Windows host only, one account at a time (whatever the terminal has open); the terminal must be
   running and logged in, otherwise the API answers 409 `TERMINAL_NOT_AVAILABLE`.
 - Admin-only, so it is not a multi-user feature.
-- Terminal times are in broker server time: configure `MT5_SERVER_TIMEZONE` (IANA zone, DST aware,
-  works on weekends); without it a single UTC offset (tick-detected or
+- Terminal times are in broker server time: configure `MT5_SERVER_TIMEZONE` (IANA zone with an optional
+  shift, e.g. `America/New_York+7` for US-rule brokers such as FTMO or `Europe/Athens` for EU-rule
+  ones; confirm the broker's DST rule; DST aware, works on weekends); without it a single UTC offset (tick-detected or
   `MT5_SERVER_UTC_OFFSET_MINUTES`) is applied to the whole history, so DST changes can shift old
   timestamps by an hour.
 - The adapter never launches the terminal: it probes running `terminal64.exe` processes first and

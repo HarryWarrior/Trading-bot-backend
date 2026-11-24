@@ -147,3 +147,47 @@ async def test_tick_within_ten_minutes_of_the_zone_offset_is_accepted(terminal, 
     terminal.tick_time = datetime(2026, 3, 2, 14, 9, 0)  # +2h09m: clock skew tolerated
     terminal.candles["EURUSD"] = [candle("2026-03-02T15:00:00")]
     assert await GetRates(terminal, clock, server_timezone=ATHENS).execute("EURUSD", "H1", 1)
+
+
+NY7 = "America/New_York+7"
+
+
+def test_zone_with_shift_follows_the_us_dst_rule_plus_seven_hours():
+    zone = ZoneConverter(NY7)
+    # 2026-03-16: US DST already active, EU not yet -> server GMT+3 -> 12:00Z
+    assert zone.to_utc(datetime(2026, 3, 16, 15, 0)) == datetime(2026, 3, 16, 12, 0, tzinfo=UTC)
+    assert zone.to_utc(datetime(2026, 1, 15, 15, 0)) == datetime(2026, 1, 15, 13, 0, tzinfo=UTC)
+    assert zone.to_utc(datetime(2026, 7, 15, 15, 0)) == datetime(2026, 7, 15, 12, 0, tzinfo=UTC)
+
+
+def test_zone_shift_accepts_minutes_and_negative_hours():
+    assert ZoneConverter("UTC+5:30").to_utc(datetime(2026, 1, 1, 12, 0)) == datetime(
+        2026, 1, 1, 6, 30, tzinfo=UTC
+    )
+    assert ZoneConverter("UTC-2").to_utc(datetime(2026, 1, 1, 12, 0)) == datetime(
+        2026, 1, 1, 14, 0, tzinfo=UTC
+    )
+    # a plain IANA name that itself contains a sign is not a shift
+    assert ZoneConverter("Etc/GMT+5").to_utc(datetime(2026, 1, 1, 12, 0)) == datetime(
+        2026, 1, 1, 17, 0, tzinfo=UTC
+    )
+
+
+@pytest.mark.parametrize(
+    "spec", ["America/New_York+", "America/New_York+7:", "America/New_York+25", "Mars/Olympus+7",
+             "America/New_York+7:75", "America/New_York +7", "+7", ""]
+)  # fmt: skip
+def test_invalid_zone_specs_are_rejected(spec):
+    with pytest.raises(ValueError, match="time zone"):
+        ZoneConverter(spec)
+
+
+def test_shifted_zone_sanity_check_uses_the_shifted_offset():
+    zone = ZoneConverter(NY7)
+    now = datetime(2026, 3, 16, 12, 0, tzinfo=UTC)  # server is GMT+3
+    zone.verify_against_tick(datetime(2026, 3, 16, 15, 0, 5), now)
+    with pytest.raises(ServerTimezoneMismatch):
+        zone.verify_against_tick(datetime(2026, 3, 16, 16, 0, 5), now)
+    # a plain Athens zone (+2 in March) would reject the +3 tick
+    with pytest.raises(ServerTimezoneMismatch):
+        ZoneConverter(ATHENS).verify_against_tick(datetime(2026, 3, 16, 15, 0, 5), now)

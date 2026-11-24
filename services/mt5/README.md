@@ -41,21 +41,31 @@ See `.env.example` (copy to the git-ignored `.env`).
 | `JOURNAL_URL` | default `http://localhost:8002` |
 | `MONGODB_URL`, `DATABASE_NAME` | default `mongodb://localhost:27017`, `mt5_db` |
 | `CORS_ORIGINS`, `ENVIRONMENT`, `LOG_LEVEL` | as in the other services |
-| `MT5_SERVER_TIMEZONE` | recommended, IANA zone of the broker server clock, e.g. `Europe/Athens` |
+| `MT5_SERVER_TIMEZONE` | recommended: `<IANA zone>` or `<IANA zone>+-H[:MM]`, e.g. `America/New_York+7` or `Europe/Athens` |
 | `MT5_SERVER_UTC_OFFSET_MINUTES` | optional, -720..840; ignored when `MT5_SERVER_TIMEZONE` is set |
 
 ### Broker server time: `MT5_SERVER_TIMEZONE` (recommended)
 
-MT5 deal and candle times are broker server time, not UTC. Set `MT5_SERVER_TIMEZONE` to the IANA
-zone of the broker clock; brokers on EET such as FTMO use `Europe/Athens` (GMT+2 in winter, GMT+3
-in summer). Every deal and candle is converted with the offset in force at ITS OWN timestamp, so a
-history that spans DST changes is correct, and no market data is needed, so it also works on
+MT5 deal and candle times are broker server time, not UTC. Set `MT5_SERVER_TIMEZONE` to the rule
+your broker's clock follows. CONFIRM IT: brokers differ in WHEN they switch between GMT+2 and GMT+3.
+
+- US-rule brokers (FTMO and many others, "New York close": the day rolls at 17:00 New York) use
+  `America/New_York+7`, i.e. server time = New York local time + 7 hours (GMT+2 in winter, GMT+3 in
+  summer, switching on US DST dates).
+- EU-rule brokers use `Europe/Athens` (switching on EU DST dates).
+- Otherwise use the fixed `MT5_SERVER_UTC_OFFSET_MINUTES` (no DST handling).
+
+The value is `<IANA zone>` or `<IANA zone>+-H[:MM]` (the shift is added to the zone's local time).
+Picking the wrong rule is off by one hour in the weeks (about 3 per year) where the US and EU
+dates differ. Every deal and candle is converted with the offset in force at ITS OWN timestamp, so
+a history that spans DST changes is correct, and no market data is needed, so it also works on
 weekends. Wall-clock times that happen twice or never at a DST change are resolved with `fold=0`
 (first occurrence / offset before the jump).
 
 When a live tick is available the zone is sanity-checked: a tick AHEAD of the zone's current time
-by more than 10 minutes cannot be real, and the call answers `SERVER_TIMEZONE_MISMATCH` (409). A
-zone set too far ahead of the real broker time looks like a stale tick and is not detected.
+by more than 10 minutes cannot be real, and the call answers `SERVER_TIMEZONE_MISMATCH` (409), which
+also happens during market hours in those differing weeks if the wrong rule is configured. A zone
+set too far ahead of the real broker time looks like a stale tick and is not detected.
 
 Without `MT5_SERVER_TIMEZONE` the offset is detected as
 `round_to_30min(latest_tick_server_time - utc_now)` (needs a fresh tick; rejected when the market
