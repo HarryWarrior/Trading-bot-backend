@@ -246,3 +246,37 @@ async def test_rates_count_out_of_range(terminal, clock, count):
 async def test_rates_accepts_all_timeframes(terminal, clock, timeframe):
     terminal.candles["EURUSD"] = [candle("2026-03-02T15:00:00")]
     assert len(await GetRates(terminal, clock).execute("EURUSD", timeframe, 1000)) == 1
+
+
+async def test_rates_use_configured_offset_override(terminal, clock):
+    terminal.tick_time = datetime(2026, 2, 27, 23, 59, 0)  # stale (weekend)
+    terminal.candles["EURUSD"] = [candle("2026-03-02T15:00:00")]
+    result = await GetRates(terminal, clock, server_utc_offset_minutes=120).execute(
+        "EURUSD", "H1", 1
+    )
+    assert result[0].time == datetime(2026, 3, 2, 13, 0, tzinfo=UTC)
+
+
+async def test_rates_with_stale_ticks_are_unavailable(terminal, clock):
+    terminal.tick_time = datetime(2026, 2, 27, 23, 59, 0)
+    terminal.candles["EURUSD"] = [candle("2026-03-02T15:00:00")]
+    with pytest.raises(TerminalNotAvailable, match="stale"):
+        await GetRates(terminal, clock).execute("EURUSD", "H1", 1)
+
+
+async def test_sync_with_stale_ticks_writes_nothing(terminal, journal, repo, clock, ids):
+    account = await LinkAccount(terminal, repo, clock, ids).execute("u1")
+    terminal.deals = closed_position_deals()
+    terminal.tick_time = datetime(2026, 2, 27, 23, 59, 0)
+    with pytest.raises(TerminalNotAvailable, match="stale"):
+        await SyncAccount(terminal, journal, repo, clock).execute("u1", account.id, "tok")
+    assert journal.calls == []
+
+
+async def test_sync_uses_configured_offset_override(terminal, journal, repo, clock, ids):
+    account = await LinkAccount(terminal, repo, clock, ids).execute("u1")
+    terminal.deals = closed_position_deals()
+    terminal.tick_time = datetime(2026, 2, 27, 23, 59, 0)
+    sync = SyncAccount(terminal, journal, repo, clock, server_utc_offset_minutes=120)
+    await sync.execute("u1", account.id, "tok")
+    assert journal.calls[0][2][0].open_time == datetime(2026, 3, 2, 8, 0, tzinfo=UTC)

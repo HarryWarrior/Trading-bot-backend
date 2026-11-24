@@ -177,3 +177,24 @@ def test_naive_inputs_required():
         to_utc(datetime(2026, 3, 2, tzinfo=UTC), timedelta(0))
     with pytest.raises(ValueError):
         server_offset(datetime(2026, 3, 2), datetime(2026, 3, 2))
+
+
+def test_zero_amount_adjustment_is_skipped():
+
+    result = build_trades(
+        [deal(1, 0, "2026-03-02T10:00:00", DealType.CORRECTION, DealEntry.IN)], timedelta(0)
+    )
+    assert result.balance_events == []
+
+
+def test_weighted_close_price_is_quantized_to_ten_decimals():
+
+    deals = [
+        deal(1, 5, "2026-03-02T10:00:00", DealType.BUY, DealEntry.IN, volume="3", price="1.1"),
+        deal(2, 5, "2026-03-02T11:00:00", DealType.SELL, DealEntry.OUT, volume="1", price="1.1"),
+        deal(3, 5, "2026-03-02T11:05:00", DealType.SELL, DealEntry.OUT, volume="1", price="1.2"),
+        deal(4, 5, "2026-03-02T11:10:00", DealType.SELL, DealEntry.OUT, volume="1", price="1.2"),
+    ]
+    trade = build_trades(deals, timedelta(0)).trades[0]
+    assert trade.close_price == Decimal("1.1666666667")
+    assert trade.open_price == Decimal("1.1")

@@ -18,6 +18,7 @@ from mt5_service.domain.time import to_utc
 
 BalanceKind = Literal["deposit", "withdrawal", "credit", "adjustment"]
 
+_PRICE_PLACES = 10
 _EXIT_ENTRIES = (DealEntry.OUT, DealEntry.OUT_BY)
 _TRADE_TYPES = (DealType.BUY, DealType.SELL)
 _IGNORED_TYPES = (DealType.BUY_CANCELED, DealType.SELL_CANCELED)
@@ -102,12 +103,17 @@ def _balance_event(deal: Deal, offset: timedelta) -> BalanceEventOut | None:
     else:
         kind = "adjustment"
         amount = deal.profit + deal.commission + deal.swap + deal.fee
+        if amount == 0:
+            return None
     return BalanceEventOut(kind, amount, time, str(deal.ticket), comment)
 
 
 def _weighted_price(deals: list[Deal]) -> Decimal:
     total = sum((d.volume for d in deals), Decimal(0))
-    return sum((d.price * d.volume for d in deals), Decimal(0)) / total
+    price = sum((d.price * d.volume for d in deals), Decimal(0)) / total
+    if price.as_tuple().exponent < -_PRICE_PLACES:
+        price = price.quantize(Decimal(1).scaleb(-_PRICE_PLACES))
+    return price
 
 
 def _build_position(

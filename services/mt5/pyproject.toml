@@ -12,6 +12,7 @@ dependencies = [
     "trading-shared",
     "fastapi==0.104.1",
     "uvicorn==0.24.0",
+    "MetaTrader5==5.0.6231; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
@@ -22,4 +23,7 @@ packages = ["src/mt5_service"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-addopts = "--import-mode=importlib"
+addopts = "--import-mode=importlib -m 'not live'"
+markers = [
+    "live: needs a running, logged-in MetaTrader 5 terminal on this machine; run with -m live",
+]

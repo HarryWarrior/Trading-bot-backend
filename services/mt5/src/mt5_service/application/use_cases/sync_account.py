@@ -4,7 +4,7 @@ from mt5_service.application.ports.repositories import LinkedAccountRepository
 from mt5_service.application.ports.terminal import BrokerTerminal
 from mt5_service.domain.account import SyncResult
 from mt5_service.domain.errors import AccountNotFound, TerminalAccountMismatch
-from mt5_service.domain.time import server_offset
+from mt5_service.domain.time import resolve_offset
 from mt5_service.domain.trades import build_trades
 
 
@@ -17,11 +17,13 @@ class SyncAccount:
         journal: JournalGateway,
         accounts: LinkedAccountRepository,
         clock: Clock,
+        server_utc_offset_minutes: int | None = None,
     ) -> None:
         self._terminal = terminal
         self._journal = journal
         self._accounts = accounts
         self._clock = clock
+        self._offset_override = server_utc_offset_minutes
 
     async def execute(self, user_id: str, account_id: str, token: str) -> SyncResult:
         account = await self._accounts.get(user_id, account_id)
@@ -33,7 +35,9 @@ class SyncAccount:
 
         deals = await self._terminal.history_deals()
         now = self._clock.now()
-        offset = server_offset(await self._terminal.latest_tick_time(None), now)
+        offset = resolve_offset(
+            await self._terminal.latest_tick_time(None), now, self._offset_override
+        )
         built = build_trades(deals, offset)
         ingested = await self._journal.ingest(
             token, account.account_ref, built.trades, built.balance_events
