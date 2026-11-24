@@ -119,10 +119,12 @@ def build_mt5_xlsx(
     return buffer.getvalue()
 
 
-def build_flat_xlsx(rows: Sequence[Sequence], header: Sequence[str]) -> bytes:
+def build_flat_xlsx(rows: Sequence[Sequence], header: Sequence[str], title: bool = True) -> bytes:
+    """Header on sheet row 3. Without the title, rows 1-2 are empty (never written)."""
     wb = _new_workbook()
     ws = wb.active
-    _put(ws, 1, ["Some title row"])
+    if title:
+        _put(ws, 1, ["Some title row"])
     row = _put(ws, 3, header)
     for values in rows:
         row = _put(ws, row, values)

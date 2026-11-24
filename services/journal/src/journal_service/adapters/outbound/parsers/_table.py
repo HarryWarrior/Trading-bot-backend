@@ -102,19 +102,31 @@ def is_xlsx(content: bytes) -> bool:
 
 
 def read_xlsx_rows(content: bytes) -> list[Row]:
+    """``rows[i]`` is sheet row ``i + 1`` (leading empty rows included)."""
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")  # openpyxl: "Workbook contains no default style"
             workbook = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
-            rows = [list(r) for r in workbook.worksheets[0].iter_rows(values_only=True)]
+            sheet = workbook.worksheets[0]
+            rows = [list(r) for r in sheet.iter_rows(min_row=1, min_col=1, values_only=True)]
     except Exception as exc:  # corrupt zip, not a workbook, ...
         raise UnreadableReport("the spreadsheet could not be opened") from exc
     return rows
 
 
 def read_csv_rows(content: bytes, delimiter: str) -> list[Row]:
+    """``rows[i]`` is the record starting on text line ``i + 1``.
+
+    A record spanning several lines (quoted newline) is followed by empty filler rows, so later
+    records keep their line numbers; empty rows are skipped by every table reader.
+    """
     text = decode_text(content)
-    return [list(r) for r in csv.reader(io.StringIO(text), delimiter=delimiter)]
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
+    rows: list[Row] = []
+    for record in reader:
+        rows.append(list(record))
+        rows.extend([] for _ in range(reader.line_num - len(rows)))
+    return rows
 
 
 # ------------------------------------------------------------------ columns
@@ -318,18 +330,17 @@ def is_section_label(row: Row) -> bool:
 def read_trade_table(
     rows: list[Row], header_index: int, mapping: dict[str, int]
 ) -> tuple[list[ParsedTrade], list[SkippedRow]]:
+    """Skipped rows carry the absolute 1-based sheet/file row, as a user sees it."""
     trades: list[ParsedTrade] = []
     skipped: list[SkippedRow] = []
-    row_number = 0
-    for row in rows[header_index + 1 :]:
+    # rows[i] is sheet/file row i + 1, so the first data row is header_index + 2.
+    for row_number, row in enumerate(rows[header_index + 1 :], start=header_index + 2):
         if is_blank_row(row):
             continue  # blank rows inside a table are skipped, never a reason to stop
         if is_section_label(row):
             break
-        row_number += 1
         if is_blank(cell(row, mapping, "open_time")) and is_blank(cell(row, mapping, "symbol")):
             if is_blank(cell(row, mapping, "type")):
-                row_number -= 1
                 continue  # totals line (only commission/swap/profit filled)
             skipped.append(SkippedRow(row_number, "time and symbol are missing"))
             continue

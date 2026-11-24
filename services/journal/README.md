@@ -48,7 +48,8 @@ Money fields are rounded to 2 decimals in responses; prices and volume are not.
   Profit, Comment` (see `data/samples/sample_trades.csv`); account is the stable per-user
   `"upload"` (also used by MT5 reports without a parseable Account line), so overlapping
   uploads update the rows they share instead of duplicating them.
-- Malformed rows are skipped and reported in `skipped_rows` (row number and reason); a file with no
+- Malformed rows are skipped and reported in `skipped_rows` (reason and the absolute 1-based
+  row number as Excel or a text editor shows it, header and blank rows included); a file with no
   recognizable table is rejected with `UNREADABLE_REPORT`.
 - The same file (SHA-256) uploaded twice by the same user is rejected as a duplicate.
 - The 10 MB cap bounds parsing only; deploy behind a proxy or ASGI body-size limit.

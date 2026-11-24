@@ -119,8 +119,8 @@ def test_mt5_unknown_non_trade_deal_type_is_reported(parser):
     report = parser.parse("r.xlsx", build_mt5_xlsx(deals=deals))
 
     assert report.balance_events == []
-    assert [s.reason for s in report.skipped_rows] == [
-        "unsupported balance deal type 'Mystery Thing'"
+    assert [(s.row, s.reason) for s in report.skipped_rows] == [
+        (20, "unsupported balance deal type 'Mystery Thing'")  # first Deals row is sheet row 20
     ]
 
 
@@ -200,7 +200,7 @@ def test_malformed_row_is_skipped_with_reason(parser):
 
     assert [t.profit for t in report.trades] == [Decimal("10"), Decimal("20")]
     assert len(report.skipped_rows) == 1
-    assert report.skipped_rows[0].row == 2
+    assert report.skipped_rows[0].row == 3  # file line: header is line 1
     assert "profit" in report.skipped_rows[0].reason.lower()
 
 
@@ -210,7 +210,7 @@ def test_close_before_open_is_skipped(parser):
     report = parser.parse("x.csv", csv_bytes(text))
 
     assert report.trades == []
-    assert report.skipped_rows[0].row == 1
+    assert report.skipped_rows[0].row == 2
     assert "before" in report.skipped_rows[0].reason
 
 
@@ -229,7 +229,7 @@ def test_mt5_non_trade_type_in_positions_is_skipped(parser):
     report = parser.parse("r.xlsx", build_mt5_xlsx(positions=positions))
 
     assert [t.position_id for t in report.trades] == ["6"]
-    assert report.skipped_rows[0].row == 1
+    assert report.skipped_rows[0].row == 8  # sheet row: 5 header lines, "Positions", header
 
 
 def test_ticket_column_becomes_position_id(parser):
@@ -348,6 +348,7 @@ def test_unparseable_balance_rows_are_reported_not_dropped(parser):
 
     assert [e.source_ref for e in report.balance_events] == ["1"]
     assert len(report.skipped_rows) == 3  # zero-amount row is ignored on purpose
+    assert [s.row for s in report.skipped_rows] == [21, 22, 23]  # sheet rows
     assert all("balance row" in s.reason for s in report.skipped_rows)
 
 
@@ -356,3 +357,47 @@ def test_xlsx_bytes_with_csv_filename_are_parsed(parser):
 
     assert len(report.trades) == 3
     assert report.account is not None
+
+
+def test_skipped_row_numbers_count_blank_lines(parser):
+    good = "2025-03-01 10:00:00,2025-03-01 11:00:00,EURUSD,BUY,1,1.1,1.2,10,\n"
+    bad = "2025-03-02 10:00:00,2025-03-02 11:00:00,EURUSD,BUY,1,1.1,1.2,abc,\n"
+    text = FLAT_HEADER + good + "\n\n" + bad
+
+    report = parser.parse("x.csv", csv_bytes(text))
+
+    assert [s.row for s in report.skipped_rows] == [5]
+
+
+def test_skipped_row_numbers_count_lines_of_multiline_fields(parser):
+    multiline = '2025-03-01 10:00:00,2025-03-01 11:00:00,EURUSD,BUY,1,1.1,1.2,10,"a\nb"\n'
+    bad = "2025-03-02 10:00:00,2025-03-02 11:00:00,EURUSD,BUY,1,1.1,1.2,abc,\n"
+    text = FLAT_HEADER + multiline + bad
+
+    report = parser.parse("x.csv", csv_bytes(text))
+
+    assert len(report.trades) == 1
+    assert [s.row for s in report.skipped_rows] == [4]
+
+
+def test_skipped_row_numbers_are_sheet_rows_in_flat_xlsx(parser):
+    header = ["Open Time", "Close Time", "Symbol", "Type", "Volume", "Open Price",
+              "Close Price", "Profit"]  # fmt: skip
+    rows = [
+        ["2025-03-01 10:00:00", "2025-03-01 11:00:00", "EURUSD", "BUY", "1", "1.1", "1.2", "10"],
+        ["2025-03-02 10:00:00", "2025-03-02 11:00:00", "EURUSD", "BUY", "1", "1.1", "1.2", "x"],
+    ]
+
+    report = parser.parse("t.xlsx", build_flat_xlsx(rows, header))
+
+    assert [s.row for s in report.skipped_rows] == [5]  # title row 1, header row 3
+
+
+def test_skipped_row_numbers_count_leading_empty_sheet_rows(parser):
+    header = ["Open Time", "Close Time", "Symbol", "Type", "Volume", "Open Price",
+              "Close Price", "Profit"]  # fmt: skip
+    bad = ["2025-03-02 10:00:00", "2025-03-02 11:00:00", "EURUSD", "BUY", "1", "1.1", "1.2", "x"]
+
+    content = build_flat_xlsx([bad], header, title=False)
+
+    assert [s.row for s in parser.parse("t.xlsx", content).skipped_rows] == [4]

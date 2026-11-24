@@ -126,13 +126,12 @@ class Mt5ReportParser:
         mapping = map_columns(rows[header_index])
         events: list[ParsedBalanceEvent] = []
         skipped: list[SkippedRow] = []
-        deal_row = 0
-        for row in rows[header_index + 1 :]:
+        # rows[i] is sheet row i + 1: skipped rows report the sheet row a user sees.
+        for deal_row, row in enumerate(rows[header_index + 1 :], start=header_index + 2):
             if is_blank_row(row):
                 continue
             if is_section_label(row):
                 break
-            deal_row += 1
             type_cell = cell(row, mapping, "type")
             if is_blank(type_cell):
                 continue  # totals line: no deal type, no information of its own
