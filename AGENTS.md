@@ -52,15 +52,20 @@ scripts/  .githooks/                # changelog script, pre-push hook
 ```bash
 python -m venv .venv && .venv\Scripts\activate          # Windows (source .venv/bin/activate elsewhere)
 pip install -r requirements.txt                           # legacy app
-pip install -e "libs/shared[dev]" -e "services/_template[dev]" -e "services/auth[dev]" ruff
+pip install -e "libs/shared[dev]" -e "services/_template[dev]" -e "services/auth[dev]" -e "services/journal[dev]" -e "services/analytics[dev]" ruff
 uvicorn app.main:app --reload --port 8000                 # legacy API (needs MongoDB on localhost:27017)
 uvicorn template_service.main:app --reload --port 8010    # template service
 cp services/auth/.env.example services/auth/.env         # then set JWT_SECRET_KEY (git-ignored)
 cd services/auth && uvicorn auth_service.main:app --reload --port 8001   # auth service (needs MongoDB)
-powershell -File scripts/dev.ps1                          # dev runner: starts the new services (auth on 8001), not the legacy app
+cp services/journal/.env.example services/journal/.env   # and services/analytics/.env.example; all three .env files MUST share the same JWT_SECRET_KEY
+cd services/journal && uvicorn journal_service.main:app --reload --port 8002      # journal service (needs MongoDB)
+cd services/analytics && uvicorn analytics_service.main:app --reload --port 8003  # analytics service (reads journal via JOURNAL_URL)
+powershell -File scripts/dev.ps1 [-Only auth]             # dev runner: auth 8001, journal 8002, analytics 8003 (checks the shared JWT secret); not the legacy app
 cd services/auth && python scripts/migrate_legacy_users.py --help   # copy legacy users into auth_db (needs the venv active)
 cd services/auth && python scripts/promote_admin.py <email>     # grant admin role (needs the venv active)
-pytest libs/shared/tests services/_template/tests services/auth/tests   # new code (auth integration tests skip without MongoDB)
+pytest libs/shared/tests services tests -q -rs            # everything: shared lib, all services, legacy (needs local MongoDB; expect 0 skipped)
+pytest libs/shared/tests services                         # new code only
+pytest -m private services/journal/tests                  # local only: parse real reports in data/private/ (default runs deselect them)
 pytest tests                                              # legacy tests
 pytest tests/acceptance -rxX                              # status report of the legacy API: what works, known bugs (needs local MongoDB)
 ruff check . && ruff format --check .

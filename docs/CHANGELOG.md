@@ -14,7 +14,10 @@
 - `libs/shared`: `trading_shared.auth` (local JWT verification, `require_role`), `trading_shared.mongo` (Motor client, idempotent indexes) and `trading_shared.request_id` (`X-Request-ID` middleware).
 - `services/auth` (port 8001, `auth_db`): sign-up with email code, sign-in, rotating refresh tokens, sign-out, password reset, roles; codes are only logged locally when no SMTP is set.
 - `services/auth/scripts/migrate_legacy_users.py` and `promote_admin.py`.
-- `scripts/dev.ps1`: dev runner for the new services (auth for now).
+- `scripts/dev.ps1`: dev runner for the new services (auth, journal, analytics); refuses to start if their `JWT_SECRET_KEY` values differ.
+- `services/journal` (port 8002, `journal_db`): MT5 HTML/XLSX and flat CSV/XLSX report parsers, idempotent per-user trade and balance-event import, trades/accounts/dataset queries, MT5 ingest endpoint. Uses `python-multipart` 0.0.20.
+- `services/analytics` (port 8003, stateless): KPI summary, equity/drawdown, daily, monthly, by-symbol and hourly stats computed from the journal API (503 `JOURNAL_UNAVAILABLE` when journal is down).
+- Root pytest config: `asyncio_mode = "auto"`, `--import-mode=importlib`, default `-m 'not private'`; `-m private` reads real reports from git-ignored `data/private/`.
 
 ### Changed
 - Sample data moved to `data/samples/`; real reports go in git-ignored `data/private/`.

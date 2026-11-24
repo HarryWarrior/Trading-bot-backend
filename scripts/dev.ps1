@@ -10,9 +10,11 @@ if (-not (Test-Path $python)) {
     exit 1
 }
 
-# Plans 2-4 add entries here: Name, Dir (under services/), Port, Module (uvicorn app path).
+# Plans 3-4 add entries here: Name, Dir (under services/), Port, Module (uvicorn app path).
 $services = @(
-    @{ Name = "auth"; Dir = "auth"; Port = 8001; Module = "auth_service.main:app" }
+    @{ Name = "auth"; Dir = "auth"; Port = 8001; Module = "auth_service.main:app" },
+    @{ Name = "journal"; Dir = "journal"; Port = 8002; Module = "journal_service.main:app" },
+    @{ Name = "analytics"; Dir = "analytics"; Port = 8003; Module = "analytics_service.main:app" }
 )
 if ($Only.Count -gt 0) { $services = @($services | Where-Object { $Only -contains $_.Name }) }
 if ($services.Count -eq 0) { Write-Error "No matching services."; exit 1 }
@@ -23,6 +25,23 @@ foreach ($svc in $services) {
         Write-Error "Missing $dir\.env. Copy .env.example to .env and set the required values."
         exit 1
     }
+}
+
+# Services that verify each other's tokens must share one JWT_SECRET_KEY (compared, never printed).
+function Get-EnvValue([string]$file, [string]$key) {
+    $line = Get-Content -LiteralPath $file | Where-Object { $_ -match ("^\s*" + $key + "\s*=") } | Select-Object -Last 1
+    if (-not $line) { return $null }
+    return ($line -replace "^[^=]*=", "").Trim().Trim('"').Trim("'")
+}
+$secrets = @{}
+foreach ($svc in $services) {
+    $secrets[$svc.Name] = Get-EnvValue (Join-Path $root ("services\" + $svc.Dir + "\.env")) "JWT_SECRET_KEY"
+}
+$reference = $services[0].Name
+$differing = @($services | Where-Object { $secrets[$_.Name] -ne $secrets[$reference] } | ForEach-Object { $_.Name })
+if ($differing.Count -gt 0) {
+    Write-Error ("JWT_SECRET_KEY of " + ($differing -join ", ") + " differs from " + $reference + ". All services must share the same value.")
+    exit 1
 }
 
 $procs = @()

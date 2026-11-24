@@ -87,7 +87,7 @@ df["streak_group"] = (df["sign"] != df["sign"].shift()).cumsum()
 | Step | Spec |
 |---|---|
 | `libs/shared`, service template, agent rules | 000 (done in `feat/agents-foundation`) |
-| Gateway + compose, `auth`, `journal`, `analytics` services; security debt fixed; `app/` retired | 001 |
+| Gateway + compose, `auth`, `journal`, `analytics` services; security debt fixed; `app/` retired | 001 (`auth`, `journal`, `analytics` built, in progress; gateway, compose and `app/` retirement pending) |
 | `mt5-bridge` + MQL5 EA; automatic sync into `journal` | 002 |
 | `strategies`, `backtester`, `execution` (paper → live) | 003 |
 | AI-filled journal via MCP/API | 004 |
