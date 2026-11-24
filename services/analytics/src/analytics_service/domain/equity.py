@@ -32,6 +32,9 @@ def walk_equity(dataset: Dataset) -> EquityWalk:
     Balance events up to the first trade's close time form the starting balance; with no trades
     every balance event does. Without any starting balance the equity starts at 0, but the
     starting balance stays unknown (None).
+
+    Balance events after the starting point shift equity and the running peak by the same
+    amount, so withdrawals never count as drawdown; only trade results do.
     """
     trades = dataset.ordered_trades()
     balances = sorted(dataset.balance_events, key=lambda event: event.time)
@@ -50,8 +53,11 @@ def walk_equity(dataset: Dataset) -> EquityWalk:
     worst = ZERO
     worst_peak = peak
     points: list[EquityPoint] = []
-    for time, _kind, amount in events:
+    for time, kind, amount in events:
         equity += amount
+        if kind == 0:
+            # Deposits/withdrawals/adjustments move the peak too: only trades create drawdown.
+            peak += amount
         peak = max(peak, equity)
         points.append(EquityPoint(time, equity))
         drawdown = equity - peak
