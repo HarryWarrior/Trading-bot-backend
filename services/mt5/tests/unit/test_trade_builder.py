@@ -180,7 +180,6 @@ def test_naive_inputs_required():
 
 
 def test_zero_amount_adjustment_is_skipped():
-
     result = build_trades(
         [deal(1, 0, "2026-03-02T10:00:00", DealType.CORRECTION, DealEntry.IN)], timedelta(0)
     )
@@ -198,3 +197,25 @@ def test_weighted_close_price_is_quantized_to_ten_decimals():
     trade = build_trades(deals, timedelta(0)).trades[0]
     assert trade.close_price == Decimal("1.1666666667")
     assert trade.open_price == Decimal("1.1")
+
+
+def test_unknown_deal_type_becomes_adjustment_and_zero_is_skipped():
+    result = build_trades(
+        [
+            deal(1, 0, "2026-03-02T10:00:00", DealType.BALANCE, DealEntry.IN, profit="1"),
+            deal(2, 0, "2026-03-02T10:01:00", 99, DealEntry.IN, profit="5", commission="-1"),
+            deal(3, 0, "2026-03-02T10:02:00", 98, DealEntry.IN),
+        ],
+        timedelta(0),
+    )
+    kinds = [(e.kind, e.amount) for e in result.balance_events]
+    assert kinds == [("deposit", D("1")), ("adjustment", D("4"))]
+
+
+def test_unknown_entry_on_trade_deal_skips_position_with_reason():
+    deals = closed_position_deals(7) + [
+        deal(9, 8, "2026-03-02T12:00:00", DealType.BUY, 9, volume="1", price="1.1")
+    ]
+    result = build_trades(deals, timedelta(0))
+    assert [t.position_id for t in result.trades] == ["7"]
+    assert result.skipped_positions == [("8", "unknown deal entry 9")]

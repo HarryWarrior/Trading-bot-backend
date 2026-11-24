@@ -313,3 +313,26 @@ async def test_concurrent_calls_are_serialized(mt5, adapter):
     results = await asyncio.gather(*(adapter.current_account() for _ in range(5)))
     assert all(r.login == 123456 for r in results)
     assert len(set(mt5.threads)) == 1
+
+
+async def test_unknown_deal_type_and_entry_are_kept_as_raw_ints(mt5, adapter):
+    mt5.deals = [make_deal(1, type=99, entry=9)]
+    deal = (await adapter.history_deals())[0]
+    assert deal.type == 99 and deal.entry == 9
+    assert not isinstance(deal.type, DealType) and not isinstance(deal.entry, DealEntry)
+
+
+async def test_not_logged_in_resets_session_and_reconnects(mt5, adapter):
+    mt5.account = None
+    with pytest.raises(TerminalNotAvailable, match="terminal not logged in"):
+        await adapter.current_account()
+    assert any(c[0] == "shutdown" for c in mt5.calls)
+    mt5.account = AccountInfo(1, "S", "N", "USD", 1.0, 1.0, 2, "C")
+    assert (await adapter.current_account()).trade_mode == "real"
+    assert len([c for c in mt5.calls if c[0] == "initialize"]) == 2
+
+
+async def test_no_market_data_resets_session(mt5, adapter):
+    with pytest.raises(TerminalNotAvailable, match="no market data"):
+        await adapter.latest_tick_time(None)
+    assert any(c[0] == "shutdown" for c in mt5.calls)

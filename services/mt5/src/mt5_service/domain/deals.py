@@ -41,8 +41,8 @@ class Deal:
     ticket: int
     position_id: int
     time_server: datetime  # naive broker server time
-    type: DealType
-    entry: DealEntry
+    type: DealType | int  # raw int when the broker reports a value outside the enum
+    entry: DealEntry | int
     symbol: str
     volume: Decimal
     price: Decimal

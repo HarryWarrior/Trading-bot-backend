@@ -4,7 +4,8 @@ Rules (see README): grouped by ``position_id``; side = side of the IN deal; volu
 volumes; a position is closed only when the exit volume equals the entry volume (Decimal
 equality). Open positions are counted, never sent. Positions containing an INOUT (reversal) deal
 are not supported yet: they are reported in ``skipped_positions`` with a reason instead of being
-guessed. BUY_CANCELED / SELL_CANCELED deals are ignored (neither balance nor trades).
+guessed; so are positions with an unknown entry value. Deals with an unknown type that are not
+buy/sell become ``adjustment`` balance events (when the amount is not zero). BUY_CANCELED / SELL_CANCELED deals are ignored (neither balance nor trades).
 ``fee`` is folded into ``commission`` because journal has no fee field.
 """
 
@@ -120,6 +121,9 @@ def _build_position(
     position_id: int, deals: list[Deal], offset: timedelta
 ) -> TradeOut | str | None:
     """Returns a trade, a skip reason (str) or None when the position is still open."""
+    for d in deals:
+        if not isinstance(d.entry, DealEntry):
+            return f"unknown deal entry {int(d.entry)}"
     if any(d.entry is DealEntry.INOUT for d in deals):
         return "reversal (INOUT) deals are not supported yet"
     entries = [d for d in deals if d.entry is DealEntry.IN]

@@ -35,6 +35,15 @@ def _server_time(epoch_seconds: Any) -> datetime:
     return _EPOCH + timedelta(seconds=int(epoch_seconds))
 
 
+def _enum(cls: type, value: Any) -> Any:
+    """The enum member, or the raw int when the broker reports a value we do not know."""
+    number = int(value)
+    try:
+        return cls(number)
+    except ValueError:
+        return number
+
+
 def _dec(value: Any) -> Decimal:
     return Decimal(str(float(value)))
 
@@ -120,7 +129,7 @@ class MetaTrader5TerminalAdapter:
     def _current_account(self, mt5: Any) -> TerminalAccount:
         info = mt5.account_info()
         if info is None:
-            raise TerminalNotAvailable("terminal not logged in")
+            raise self._fail(mt5, "terminal not logged in")
         try:
             trade_mode = _TRADE_MODES[int(info.trade_mode)]
         except (KeyError, ValueError):
@@ -150,8 +159,8 @@ class MetaTrader5TerminalAdapter:
                 ticket=int(d.ticket),
                 position_id=int(d.position_id),
                 time_server=_server_time(d.time),
-                type=DealType(int(d.type)),
-                entry=DealEntry(int(d.entry)),
+                type=_enum(DealType, d.type),
+                entry=_enum(DealEntry, d.entry),
                 symbol=str(d.symbol),
                 volume=_dec(d.volume),
                 price=_dec(d.price),
@@ -179,7 +188,10 @@ class MetaTrader5TerminalAdapter:
                 raise TerminalNotAvailable(f"no tick available for {symbol}")
             return found
 
-        names = [s.name for s in (mt5.symbols_get() or ()) if s.visible]
+        symbols = mt5.symbols_get()
+        if symbols is None and not self._is_ok(mt5):
+            raise self._fail(mt5, "cannot read symbols")
+        names = [s.name for s in (symbols or ()) if s.visible]
         deals = [d for d in self._raw_deals(mt5) if d.symbol]
         if deals:
             last = max(deals, key=lambda d: (int(d.time), int(getattr(d, "time_msc", 0))))
@@ -187,6 +199,7 @@ class MetaTrader5TerminalAdapter:
                 names.append(str(last.symbol))
         times = [t for t in (self._tick_time(mt5, name) for name in names) if t is not None]
         if not times:
+            self._shutdown(mt5)  # may be a lost session; reconnect on the next call
             raise TerminalNotAvailable("no market data to derive server time")
         return max(times)
 
