@@ -294,8 +294,8 @@ class MongoBalanceRepository:
                     upsert=True,
                 )
             )
-        await self._col.bulk_write(ops, ordered=True)
-        return len(events)
+        result = await self._col.bulk_write(ops, ordered=True)
+        return result.upserted_count
 
     async def all_for(self, user_id: str, account_ref: str | None) -> list[BalanceEvent]:
         query: dict[str, Any] = {"user_id": user_id}

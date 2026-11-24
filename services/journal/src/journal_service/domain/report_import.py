@@ -19,7 +19,7 @@ class ReportImport:
     account_ref: str
     trades_created: int
     trades_updated: int
-    balance_events: int
+    balance_events: int  # new balance events (already-known ones are updated, not counted)
     created_at: datetime
     skipped_rows: list[SkippedRow] = field(default_factory=list)
 

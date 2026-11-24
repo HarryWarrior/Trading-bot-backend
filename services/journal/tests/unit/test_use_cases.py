@@ -52,6 +52,20 @@ async def test_import_creates_trades_and_balance_events(journal, parsed_trade):
     assert journal.imports.items == [result]
 
 
+async def test_reimport_counts_only_new_balance_events(journal, parsed_trade):
+    journal.parser.report = report([parsed_trade("1")], balance_events=[deposit("dep-1")])
+    first = await journal.import_report().execute("u1", "a.xlsx", b"v1")
+    journal.parser.report = report(
+        [parsed_trade("1")], balance_events=[deposit("dep-1"), deposit("dep-2")]
+    )
+    second = await journal.import_report().execute("u1", "b.xlsx", b"v2")
+    journal.parser.report = report([parsed_trade("1")], balance_events=[deposit("dep-1")])
+    third = await journal.import_report().execute("u1", "c.xlsx", b"v3")
+
+    assert (first.balance_events, second.balance_events, third.balance_events) == (1, 1, 0)
+    assert len(await journal.balances.all_for("u1", None)) == 2
+
+
 async def test_same_file_twice_raises_duplicate_import_with_previous_id(journal, parsed_trade):
     journal.parser.report = report([parsed_trade("1")])
     first = await journal.import_report().execute("u1", "a.csv", b"same")
@@ -185,7 +199,7 @@ async def test_ingest_mt5_history_is_idempotent(journal, parsed_trade):
     second = await journal.ingest().execute("u1", "999@Demo", trades, [deposit("deal-9", "500")])
 
     assert (first.created, first.updated, first.balance_events) == (2, 0, 1)
-    assert (second.created, second.updated, second.balance_events) == (0, 2, 1)
+    assert (second.created, second.updated, second.balance_events) == (0, 2, 0)
     stored = await journal.trades.all_for("u1", "999@Demo")
     assert len(stored) == 2 and all(t.source == "mt5" and t.import_id is None for t in stored)
     assert len(await journal.balances.all_for("u1", "999@Demo")) == 1

@@ -273,7 +273,7 @@ async def test_balance_upsert_and_ownership(db):
     await repo.create_indexes()
     assert await repo.upsert_many("u1", [_event()]) == 1
     again = _event(id="other", amount=Decimal("-5"), kind="withdrawal")
-    assert await repo.upsert_many("u1", [again]) == 1
+    assert await repo.upsert_many("u1", [again]) == 0  # updated, not new
     got = await repo.all_for("u1", None)
     assert len(got) == 1
     assert got[0].id == "e1"

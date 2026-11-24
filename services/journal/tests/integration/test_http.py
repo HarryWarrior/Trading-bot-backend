@@ -311,7 +311,7 @@ def test_ingest_twice_then_dataset(client):
     assert first.status_code == 200
     assert first.json()["data"] == {"created": 1, "updated": 0, "balance_events": 1}
     second = client.post(f"{BASE}/ingest/mt5", json=ingest_body(), headers=headers)
-    assert second.json()["data"] == {"created": 0, "updated": 1, "balance_events": 1}
+    assert second.json()["data"] == {"created": 0, "updated": 1, "balance_events": 0}
 
     dataset = client.get(
         f"{BASE}/dataset", params={"account_ref": "999@Demo"}, headers=headers

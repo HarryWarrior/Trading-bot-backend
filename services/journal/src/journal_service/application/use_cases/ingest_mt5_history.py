@@ -10,7 +10,7 @@ from journal_service.application.use_cases._build import build_balance_event, bu
 class IngestResult:
     created: int
     updated: int
-    balance_events: int
+    balance_events: int  # new balance events only
 
 
 class IngestMt5History:

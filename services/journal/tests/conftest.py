@@ -140,11 +140,13 @@ class FakeBalanceRepository:
         self.rows: dict[tuple[str, str, str], BalanceEvent] = {}
 
     async def upsert_many(self, user_id: str, events: list[BalanceEvent]) -> int:
+        created = 0
         for event in events:
             key = (user_id, event.account_ref, event.source_ref)
             existing = self.rows.get(key)
             self.rows[key] = replace(event, id=existing.id) if existing else event
-        return len(events)
+            created += existing is None
+        return created
 
     async def all_for(self, user_id: str, account_ref: str | None) -> list[BalanceEvent]:
         return [

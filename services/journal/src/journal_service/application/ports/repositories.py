@@ -53,7 +53,9 @@ class TradeRepository(Protocol):
 
 
 class BalanceRepository(Protocol):
-    async def upsert_many(self, user_id: str, events: list[BalanceEvent]) -> int: ...
+    async def upsert_many(self, user_id: str, events: list[BalanceEvent]) -> int:
+        """Upsert by ``(account_ref, source_ref)``; return how many events are new."""
+        ...
 
     async def all_for(self, user_id: str, account_ref: str | None) -> list[BalanceEvent]: ...
 

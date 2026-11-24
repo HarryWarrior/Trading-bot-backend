@@ -33,7 +33,7 @@ All routes live under `/api/v1/journal` and require `Authorization: Bearer <acce
 | `GET` | `/trades/{id}` | 404 `NOT_FOUND` when missing or owned by someone else |
 | `GET` | `/accounts` | accounts with trade counts and first/last close |
 | `GET` | `/dataset?account_ref=` | `{trades, balance_events}`, unpaginated, for analytics |
-| `POST` | `/ingest/mt5` | `{account_ref, trades, balance_events}` -> `{created, updated, balance_events}` (idempotent) |
+| `POST` | `/ingest/mt5` | `{account_ref, trades, balance_events}` -> `{created, updated, balance_events}` (idempotent; `balance_events` counts new events only) |
 
 Errors: `DUPLICATE_IMPORT` 409 (`details.import_id`), `UNSUPPORTED_FILE` 400, `FILE_TOO_LARGE` 413,
 `UNREADABLE_REPORT` 400 (`details.reason`), `NOT_FOUND` 404, `UNAUTHENTICATED` 401.
