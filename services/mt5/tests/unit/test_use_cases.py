@@ -280,3 +280,26 @@ async def test_sync_uses_configured_offset_override(terminal, journal, repo, clo
     sync = SyncAccount(terminal, journal, repo, clock, server_utc_offset_minutes=120)
     await sync.execute("u1", account.id, "tok")
     assert journal.calls[0][2][0].open_time == datetime(2026, 3, 2, 8, 0, tzinfo=UTC)
+
+
+async def test_sync_reverifies_account_before_ingest(terminal, journal, repo, clock, ids):
+    link = LinkAccount(terminal, repo, clock, ids)
+    account = await link.execute("u1")
+    original = terminal.account
+    other = terminal_account(login=999, server="Other")
+    calls = {"n": 0}
+    real = terminal.current_account
+
+    async def switching():
+        calls["n"] += 1
+        result = await real()
+        if calls["n"] == 1:
+            terminal.account = other  # switches right after the first check
+        return result
+
+    terminal.current_account = switching
+    terminal.deals = closed_position_deals()
+    with pytest.raises(TerminalAccountMismatch):
+        await SyncAccount(terminal, journal, repo, clock).execute("u1", account.id, "tok")
+    assert journal.calls == []
+    assert original is not other

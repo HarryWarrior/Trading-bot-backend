@@ -39,6 +39,10 @@ class SyncAccount:
             await self._terminal.latest_tick_time(None), now, self._offset_override
         )
         built = build_trades(deals, offset)
+        # The terminal may have switched account while history was read: re-verify before sending.
+        again = await self._terminal.current_account()
+        if again.account_ref != account.account_ref:
+            raise TerminalAccountMismatch(account.account_ref, again.account_ref)
         ingested = await self._journal.ingest(
             token, account.account_ref, built.trades, built.balance_events
         )

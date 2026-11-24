@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, FastAPI, Query, Request, Response
 from fastapi.responses import JSONResponse
 
@@ -18,6 +20,8 @@ from mt5_service.domain.errors import DomainError
 from trading_shared.auth import CurrentUser, current_user_dependency, require_role
 from trading_shared.envelope import SuccessResponse, ok
 from trading_shared.errors import AppError, ErrorBody, ErrorResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/mt5", tags=["mt5"])
 
@@ -49,6 +53,9 @@ def register_mt5_error_mapping(app: FastAPI) -> None:
     @app.exception_handler(DomainError)
     async def _domain_error(_: Request, exc: DomainError) -> JSONResponse:
         mapped = to_app_error(exc)
+        refs = {k: v for k, v in vars(exc).items() if k in ("expected", "actual", "account_ref")}
+        if refs:
+            logger.info("%s %s", exc.code, refs)  # refs stay server-side
         body = ErrorResponse(error=ErrorBody(code=mapped.code, message=mapped.message))
         return JSONResponse(status_code=mapped.status_code, content=body.model_dump(mode="json"))
 

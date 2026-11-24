@@ -22,7 +22,8 @@ class TerminalAccountMismatch(DomainError):
     http_status = 409
 
     def __init__(self, expected: str, actual: str) -> None:
-        super().__init__(f"The terminal is logged in to {actual}, not to the linked {expected}")
+        # Generic on purpose: the refs are attributes for server logs, never for clients.
+        super().__init__("The terminal is logged in to a different account than the linked one")
         self.expected = expected
         self.actual = actual
 
@@ -32,7 +33,7 @@ class AccountAlreadyLinked(DomainError):
     http_status = 409
 
     def __init__(self, account_ref: str) -> None:
-        super().__init__(f"Account {account_ref} is already linked to another user")
+        super().__init__("This MT5 account is already linked")
         self.account_ref = account_ref
 
 

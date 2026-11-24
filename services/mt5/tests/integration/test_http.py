@@ -104,6 +104,7 @@ def test_other_admin_cannot_link_same_account(client):
     response = link(client, "carol")
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "ACCOUNT_ALREADY_LINKED"
+    assert "123456" not in response.text and "Demo-Server" not in response.text
 
 
 def test_sync_ok_returns_counts_and_forwards_token(client, terminal, journal):
@@ -132,6 +133,7 @@ def test_sync_after_terminal_switched_is_409_and_journal_untouched(client, termi
     response = client.post(f"{BASE}/accounts/{account_id}/sync", headers=auth())
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "TERMINAL_ACCOUNT_MISMATCH"
+    assert "999" not in response.text and "Other" not in response.text
     assert journal.calls == []
 
 
