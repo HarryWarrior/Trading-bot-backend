@@ -55,6 +55,18 @@ def test_mt5_xlsx_positions_and_balance(parser):
     assert report.skipped_rows == []
 
 
+def test_mt5_account_summary_block_ends_the_deals_table(parser):
+    # build_mt5_xlsx emits the Deals totals line and the Balance:/Credit Facility:/
+    # Floating P/L:/Equity: block before "Results", as real reports do.
+    report = parser.parse("report.xlsx", build_mt5_xlsx())
+
+    assert report.skipped_rows == []
+    assert [(e.kind, e.amount) for e in report.balance_events] == [
+        ("deposit", Decimal("10000.00")),
+        ("withdrawal", Decimal("-500.00")),
+    ]
+
+
 def test_mt5_report_ignores_orders_and_results_sections(parser):
     report = parser.parse("report.xlsx", build_mt5_xlsx())
 

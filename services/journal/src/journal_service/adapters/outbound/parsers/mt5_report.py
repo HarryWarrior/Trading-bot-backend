@@ -132,6 +132,8 @@ class Mt5ReportParser:
                 continue
             if is_section_label(row):
                 break
+            if row and isinstance(row[0], str) and row[0].strip().endswith(":"):
+                break  # account summary block (Balance:, Equity:, ...) ends the Deals table
             type_cell = cell(row, mapping, "type")
             if is_blank(type_cell):
                 continue  # totals line: no deal type, no information of its own

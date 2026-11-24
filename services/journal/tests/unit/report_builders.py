@@ -109,6 +109,17 @@ def build_mt5_xlsx(
     row = _put(ws, row, DEAL_HEADER)
     for deal in DEFAULT_DEALS if deals is None else deals:
         row = _put(ws, row, deal)
+    # Deals totals line: Time/Deal/Symbol/Type empty, sums in Commission/Fee/Swap/Profit/Balance.
+    row = _put(ws, row, [None] * 8 + ["-2.60", "0.00", "-0.10", "9 500.00", "9 500.00"])
+    row += 1
+    # Account summary block: label in column A, value in the column that maps to Type.
+    for label, value, label2, value2 in (
+        ("Balance:", "9 128.38", "Free Margin:", "9 128.38"),
+        ("Credit Facility:", "0.00", "Margin:", "0.00"),
+        ("Floating P/L:", "0.00", "Margin Level:", ""),
+        ("Equity:", "9 128.38", None, None),
+    ):
+        row = _put(ws, row, [label, None, None, value, None, None, label2, value2])
     row += 1
     row = _put(ws, row, ["Results"])
     row = _put(ws, row, ["Total Net Profit:", None, None, "999 999.00"])
