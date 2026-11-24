@@ -12,6 +12,8 @@ from journal_service.application.use_cases._build import build_balance_event, bu
 from journal_service.domain.errors import DuplicateImport
 from journal_service.domain.report_import import ReportImport
 
+UPLOAD_ACCOUNT_REF = "upload"
+
 
 class ImportReport:
     def __init__(
@@ -39,7 +41,9 @@ class ImportReport:
         parsed = self._parser.parse(filename, content)
         import_id = self._ids.new_id()
         account = parsed.account
-        account_ref = f"{account.login}@{account.server}" if account else f"upload:{import_id}"
+        # Flat files (and MT5 reports without a parseable Account line) share one stable
+        # per-user account so natural keys dedupe across overlapping uploads.
+        account_ref = f"{account.login}@{account.server}" if account else UPLOAD_ACCOUNT_REF
 
         trades = [
             build_trade(

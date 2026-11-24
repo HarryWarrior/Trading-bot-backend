@@ -45,7 +45,9 @@ Money fields are rounded to 2 decimals in responses; prices and volume are not.
   the header; positions are matched by position id, so re-importing a newer report of the same
   account creates only the new positions and updates the existing ones.
 - **Flat CSV**: columns `Open Time, Close Time, Symbol, Type, Volume, Open Price, Close Price,
-  Profit, Comment` (see `data/samples/sample_trades.csv`); account is `"upload:<import_id>"`.
+  Profit, Comment` (see `data/samples/sample_trades.csv`); account is the stable per-user
+  `"upload"` (also used by MT5 reports without a parseable Account line), so overlapping
+  uploads update the rows they share instead of duplicating them.
 - Malformed rows are skipped and reported in `skipped_rows` (row number and reason); a file with no
   recognizable table is rejected with `UNREADABLE_REPORT`.
 - The same file (SHA-256) uploaded twice by the same user is rejected as a duplicate.

@@ -97,11 +97,25 @@ async def test_flat_csv_import_uses_upload_account_ref(journal, parsed_trade):
 
     result = await journal.import_report().execute("u1", "flat.csv", b"x")
 
-    assert result.account_ref == f"upload:{result.id}"
+    assert result.account_ref == "upload"
     (trade,) = await journal.trades.all_for("u1", None)
-    assert trade.account_ref == f"upload:{result.id}"
+    assert trade.account_ref == "upload"
     assert trade.import_id == result.id
     assert trade.source == "report"
+
+
+async def test_overlapping_flat_uploads_do_not_duplicate_trades(journal, parsed_trade):
+    def rows(numbers):
+        return [parsed_trade(None, profit=str(n)) for n in numbers]
+
+    journal.parser.report = report(rows(range(1, 7)), account=None)
+    first = await journal.import_report().execute("u1", "a.csv", b"trades 1-6")
+    journal.parser.report = report(rows(range(4, 11)), account=None)
+    second = await journal.import_report().execute("u1", "b.csv", b"trades 4-10")
+
+    assert (first.trades_created, first.trades_updated) == (6, 0)
+    assert (second.trades_created, second.trades_updated) == (4, 3)
+    assert len(await journal.trades.all_for("u1", None)) == 10
 
 
 async def test_mt5_report_uses_login_at_server_account_ref(journal, parsed_trade):

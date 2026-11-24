@@ -19,7 +19,7 @@
 - Money and ratios rounded to 2 decimals at the API edge; percentages in percent units; nothing invented: unknown → `null`.
 - Net trade result = `profit + commission + swap` (all KPIs use net).
 - Times stored as timezone-aware UTC. Report times without a known broker offset are taken as UTC (offset handling arrives with MT5 linking in plan 3).
-- `account_ref`: MT5 report → `"<login>@<server>"` from the report header; flat CSV → `"upload:<import_id>"`; MT5 ingest → given by caller.
+- `account_ref`: MT5 report → `"<login>@<server>"` from the report header; flat CSV (and MT5 reports without a parseable Account line) → the stable per-user `"upload"` so row hashes dedupe across overlapping uploads (changed by final-review ruling; was `"upload:<import_id>"`); MT5 ingest → given by caller.
 - Natural keys (unique indexes): trades `(user_id, account_ref, position_id)` when `position_id` is known, else `(user_id, account_ref, row_hash)`; balance events `(user_id, account_ref, source_ref)`.
 - Uploads: `.csv`, `.xlsx`, `.xls`; ≤ 10 MB; same file (SHA-256) for the same user → 409 `DUPLICATE_IMPORT` with `details.import_id`.
 - Error codes: `DUPLICATE_IMPORT` 409, `UNSUPPORTED_FILE` 400, `FILE_TOO_LARGE` 413, `UNREADABLE_REPORT` 400 (with `details.reason`), `NOT_FOUND` 404, `JOURNAL_UNAVAILABLE` 503.

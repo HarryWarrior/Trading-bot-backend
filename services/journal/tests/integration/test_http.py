@@ -143,7 +143,7 @@ def test_upload_sample_then_duplicate(client):
     assert body["trades_created"] == 10
     assert body["trades_updated"] == 0
     assert body["filename"] == "sample_trades.csv"
-    assert body["account_ref"] == f"upload:{body['id']}"
+    assert body["account_ref"] == "upload"
     assert body["skipped_rows"] == []
     assert set(body) == {
         "id",
@@ -161,6 +161,18 @@ def test_upload_sample_then_duplicate(client):
     error = again.json()["error"]
     assert error["code"] == "DUPLICATE_IMPORT"
     assert error["details"] == {"import_id": body["id"]}
+
+
+def test_overlapping_csv_uploads_do_not_duplicate_trades(client):
+    header, *rows = SAMPLE.read_text(encoding="utf-8").splitlines(keepends=True)
+    first = upload(client, name="a.csv", content="".join([header, *rows[0:6]]).encode())
+    second = upload(client, name="b.csv", content="".join([header, *rows[3:10]]).encode())
+
+    assert first.status_code == second.status_code == 201
+    created = second.json()["data"]["import"]
+    assert (created["trades_created"], created["trades_updated"]) == (4, 3)
+    trades = client.get(f"{BASE}/trades", headers=auth("alice")).json()["data"]
+    assert trades["pagination"]["total_items"] == 10
 
 
 def test_upload_rejects_unsupported_extension(client):
@@ -289,7 +301,7 @@ def test_accounts(client):
     items = client.get(f"{BASE}/accounts", headers=auth("alice")).json()["data"]["items"]
     assert len(items) == 1
     assert items[0]["trades"] == 10
-    assert items[0]["account_ref"].startswith("upload:")
+    assert items[0]["account_ref"] == "upload"
     assert items[0]["first_trade_at"] and items[0]["last_trade_at"]
 
 
