@@ -34,14 +34,28 @@ All KPIs use the **net** result of a trade (`profit + commission + swap`).
 - `win_rate` = wins / total trades x 100 (breakeven trades count in the total).
 - `profit_factor` = gross profit / |gross loss| (`null` without losses); `payoff_ratio` = average
   win / average loss (`null` without both); `average_trade` = net / total (`null` without trades).
-- `max_drawdown` = largest peak-to-trough fall of the equity curve (<= 0). It includes withdrawals,
-  which lower equity like losses.
-- `max_drawdown_pct` is only computed when the starting balance is known (balance events up to the
-  first trade); otherwise `null`. It stays within [-100, 0].
-- `starting_balance` / `ending_balance` are `null` without balance information.
+- `max_drawdown` = largest peak-to-trough fall of the equity curve caused by trades (<= 0). Balance
+  events (deposits, withdrawals, credits and broker `adjustment`s) after the starting point move
+  equity and the running peak by the same amount, so a withdrawal is never drawdown; a later loss is
+  measured from the shifted peak.
+- All accounts in scope (default: every account of the user) are walked together in time order;
+  equity is the sum of the per-account equity.
+- `starting_balance` = balance events up to the first trade. It (and `ending_balance` and
+  `max_drawdown_pct`) is known only when **every** account that has trades in scope has balance
+  events at or before its own first trade; otherwise all three are `null` (another account's
+  deposit is never the base of trades without balance data).
+- `max_drawdown_pct` = `max_drawdown` / peak at that point x 100, within [-100, 0]. It is `null`
+  without a known starting balance, when the peak is not positive, and when equity fell below 0
+  (losses beyond the recorded balance mean balance data is incomplete; never clamped to -100).
 - `/equity`: when the starting balance is known, the first point is the starting balance at the time of
   the first balance event; then one point per trade (at close time) and per later balance event. Without
-  balance information the curve starts from 0 and has no synthetic opening point.
+  a known starting balance the curve starts from 0, every balance event is a point, and there is no
+  synthetic opening point.
+
+## Security note
+
+fastapi 0.104 / starlette 0.27 have known multipart-upload DoS advisories (e.g. CVE-2024-47874).
+Run the services on localhost only until plan 4 upgrades them.
 
 ## Environment
 

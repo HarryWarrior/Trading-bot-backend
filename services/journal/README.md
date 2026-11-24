@@ -54,7 +54,25 @@ Money fields are rounded to 2 decimals in responses; prices and volume are not.
 - The same file (SHA-256) uploaded twice by the same user is rejected as a duplicate.
 - The 10 MB cap bounds parsing only; deploy behind a proxy or ASGI body-size limit.
 
+- MT5 Deals rows: `balance` -> `deposit`/`withdrawal`, `credit` -> `credit`; correction, charge,
+  bonus, commission, fee, interest, dividend and tax rows (and their Spanish names) -> signed
+  `adjustment` events whose amount is Profit + Commission + Fee + Swap (blank cells count as 0).
+  Zero-amount rows are ignored; buy/sell deals are covered by the Positions section; any other
+  deal type is reported in `skipped_rows` as `unsupported balance deal type '<type>'`.
+- Balance event kinds: `deposit`, `withdrawal`, `credit`, `adjustment` (signed amounts).
+
 **Times are taken as UTC** until MT5 account linking (plan 3) provides the broker's UTC offset.
+
+## Analytics definitions (computed by the analytics service)
+
+Withdrawals and other balance events never create drawdown; only trade results do. Drawdown %,
+starting and ending balance are `null` unless every account in scope that has trades has balance
+events at or before its first trade. See `services/analytics/README.md`.
+
+## Security note
+
+fastapi 0.104 / starlette 0.27 have known multipart-upload DoS advisories (e.g. CVE-2024-47874,
+which affects `POST /imports`). Run the service on localhost only until plan 4 upgrades them.
 
 ## Run & test (from the repository root)
 
