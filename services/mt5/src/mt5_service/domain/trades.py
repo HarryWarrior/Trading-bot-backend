@@ -4,7 +4,7 @@ Rules (see README): grouped by ``position_id``; side = side of the IN deal; volu
 volumes; a position is closed only when the exit volume equals the entry volume (Decimal
 equality). Open positions are counted, never sent. Positions containing an INOUT (reversal) deal
 are not supported yet: they are reported in ``skipped_positions`` with a reason instead of being
-guessed; so are positions with an unknown entry value. Deals with an unknown type that are not
+guessed; so are positions with an unknown entry value or entry deals of both sides. Deals with an unknown type that are not
 buy/sell become ``adjustment`` balance events (when the amount is not zero). BUY_CANCELED / SELL_CANCELED deals are ignored (neither balance nor trades).
 ``fee`` is folded into ``commission`` because journal has no fee field.
 """
@@ -130,6 +130,8 @@ def _build_position(
     exits = [d for d in deals if d.entry in _EXIT_ENTRIES]
     if not entries:
         return "no entry deal in the history"
+    if len({d.type for d in entries}) > 1:
+        return "mixed entry sides"
     entry_volume = sum((d.volume for d in entries), Decimal(0))
     exit_volume = sum((d.volume for d in exits), Decimal(0))
     if exit_volume > entry_volume:

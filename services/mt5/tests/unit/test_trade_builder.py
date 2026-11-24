@@ -219,3 +219,27 @@ def test_unknown_entry_on_trade_deal_skips_position_with_reason():
     result = build_trades(deals, timedelta(0))
     assert [t.position_id for t in result.trades] == ["7"]
     assert result.skipped_positions == [("8", "unknown deal entry 9")]
+
+
+def test_mixed_entry_sides_skip_the_position_with_reason():
+    deals = [
+        deal(1, 6, "2026-03-02T10:00:00", DealType.BUY, DealEntry.IN, volume="1.0", price="1.1"),
+        deal(2, 6, "2026-03-02T10:30:00", DealType.SELL, DealEntry.IN, volume="0.5", price="1.1"),
+        deal(3, 6, "2026-03-02T11:00:00", DealType.SELL, DealEntry.OUT, volume="1.5", price="1.1"),
+    ]  # fmt: skip
+    result = build_trades(deals, PLUS_2H)
+    assert result.trades == []
+    assert result.skipped_positions == [("6", "mixed entry sides")]
+
+
+def test_multiple_entries_of_the_same_side_use_weighted_open_price():
+    deals = [
+        deal(1, 6, "2026-03-02T10:00:00", DealType.BUY, DealEntry.IN, volume="1.0", price="1.1000"),
+        deal(2, 6, "2026-03-02T10:30:00", DealType.BUY, DealEntry.IN, volume="3.0", price="1.2000"),
+        deal(3, 6, "2026-03-02T11:00:00", DealType.SELL, DealEntry.OUT, volume="4.0", price="1.3"),
+    ]  # fmt: skip
+    [trade] = build_trades(deals, PLUS_2H).trades
+    assert trade.volume == D("4.0")
+    assert trade.open_price == D("1.175")
+    assert trade.side == "buy"
+    assert trade.open_time == datetime(2026, 3, 2, 8, 0, tzinfo=UTC)
