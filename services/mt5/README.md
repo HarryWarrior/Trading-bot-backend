@@ -8,13 +8,55 @@ running terminal reports (`login@server`). When the terminal is not running, not
 another account the API answers with an error code (`TERMINAL_NOT_AVAILABLE`,
 `TERMINAL_ACCOUNT_MISMATCH`).
 
-Status: domain and use cases are built (task 1); the MT5 adapter, journal client, storage and HTTP
-routes follow in later tasks.
+The terminal adapter uses the official `MetaTrader5` Python package, which only exists for
+**Windows** and talks to a terminal already running and logged in on the same machine. The package
+is imported lazily: the service starts without a terminal (and on other OSes) and only answers
+`TERMINAL_NOT_AVAILABLE` on requests that need it.
+
+## Routes (Bearer token required)
+
+| Method | Path | Role | Result |
+|---|---|---|---|
+| POST | `/accounts/link` | admin | 201 `{account}` (new) or 200 (same user, already linked); no request body |
+| GET | `/accounts` | any user | `{accounts: [...]}` (own accounts only) |
+| GET | `/accounts/{id}/status` | any user (owner) | `{status: {connected, balance, equity, as_of, last_sync_at}}`; `connected: false` and nulls when the terminal is closed or on another account |
+| POST | `/accounts/{id}/sync` | admin | `{result: {created, updated, balance_events, open_positions, skipped_positions}}` |
+| DELETE | `/accounts/{id}` | admin | removes the link only (journal trades are kept) |
+| GET | `/rates?symbol=&timeframe=&count=` | any user | `{symbol, timeframe, candles: [{time, open, high, low, close, tick_volume}]}`; timeframes `M1 M5 M15 M30 H1 H4 D1`, `count` 1..1000 |
+
+Linking, syncing and unlinking require role `admin`. One terminal account can be linked to only one
+user (`ACCOUNT_ALREADY_LINKED` 409 for anyone else). Sync forwards the caller's own access token to
+the journal, plus the shared `X-Service-Key`. Error codes: `TERMINAL_NOT_AVAILABLE` 409,
+`TERMINAL_ACCOUNT_MISMATCH` 409, `ACCOUNT_ALREADY_LINKED` 409, `NOT_FOUND` 404,
+`SYMBOL_NOT_FOUND` 404, `INVALID_TIMEFRAME` 422, `JOURNAL_UNAVAILABLE` 503, `FORBIDDEN` 403.
+
+## Environment variables
+
+See `.env.example` (copy to the git-ignored `.env`).
+
+| Variable | Notes |
+|---|---|
+| `JWT_SECRET_KEY` | required, >= 32 chars, same as auth |
+| `INGEST_SERVICE_KEY` | required, >= 32 chars, same as the journal service |
+| `JOURNAL_URL` | default `http://localhost:8002` |
+| `MONGODB_URL`, `DATABASE_NAME` | default `mongodb://localhost:27017`, `mt5_db` |
+| `CORS_ORIGINS`, `ENVIRONMENT`, `LOG_LEVEL` | as in the other services |
+| `MT5_SERVER_UTC_OFFSET_MINUTES` | optional, -720..840 |
+
+### Broker server time and `MT5_SERVER_UTC_OFFSET_MINUTES`
+
+MT5 deal and candle times are broker server time, not UTC. By default the offset is detected as
+`round_to_30min(latest_tick_server_time - utc_now)`. That relies on a fresh tick: when the market
+is closed (weekends) or the symbol is stale, the last tick is old and the detection is wrong or
+rejected. Set `MT5_SERVER_UTC_OFFSET_MINUTES` explicitly in that case. Brokers such as FTMO use
+GMT+2 in winter and GMT+3 in summer: `120` or `180`.
+
+Caveat: one offset applies to the WHOLE history. A broker that observes daylight saving time
+shifts by an hour twice a year, so deals made on the other side of a DST change are off by one
+hour in UTC. A fixed override does not fix this; it only avoids stale-tick errors.
 
 ## Rules implemented in the domain
 
-- Deal times are broker server time. `offset = round_to_30min(latest_tick_server - utc_now)`;
-  stored/returned times are tz-aware UTC.
 - Deals are grouped by `position_id`. Side = side of the IN deal, volume = sum of IN volumes, close
   price = volume-weighted exit price, close time = last exit, profit/commission/swap/fee summed
   (fee is folded into commission because journal has no fee field). Only fully closed positions
@@ -23,10 +65,14 @@ routes follow in later tasks.
   in `skipped_positions` with a reason, never guessed.
 - Balance-type deals: BALANCE -> deposit/withdrawal by sign, CREDIT -> credit, every other non-trade
   type -> adjustment (profit + commission + swap + fee). BUY_CANCELED / SELL_CANCELED are ignored.
+- Re-syncing reads the full history again; journal upserts by `position_id`, so there are no
+  duplicates.
 
 ## Run and test
 
 ```bash
 pip install -e libs/shared -e "services/mt5[dev]"
-pytest services/mt5/tests -q -W error
+cd services/mt5 && uvicorn mt5_service.main:app --reload --port 8004   # needs MongoDB; terminal only for link/sync/status/rates
+pytest services/mt5/tests -q -W error          # fake terminal, no MetaTrader5 contact; Mongo-backed tests need local MongoDB
+pytest -m live services/mt5/tests              # LIVE: needs MetaTrader 5 open and logged in on this machine (read-only calls)
 ```
