@@ -91,3 +91,16 @@
 - [ ] **Step 3:** Smoke without terminal: `dev.ps1` with 4 services; promote a throwaway user to admin (`promote_admin.py`), `POST /accounts/link` → 409 `TERMINAL_NOT_AVAILABLE`; `GET /rates` → 409. Clean up the throwaway user.
 - [ ] **Step 4 (owner present):** with the owner's MT5 terminal open and logged in (demo account recommended): link → account shown matches the terminal; sync → trades appear in journal; analytics summary reflects them; re-sync → `created == 0`; `GET /rates?symbol=<a symbol from the account>&timeframe=H1&count=50` → real candles. Then unlink if the owner wants. Never print balances or account numbers in logs committed to git.
 - [ ] **Step 5:** Commit `docs: document mt5 service and terminal adapter`
+
+## Execution notes (plan 3 done)
+
+Executed subagent-driven; every task reviewed; final review → one fix wave: never launch the terminal (psutil probe,
+attach via `initialize(path=…)` only when exactly one terminal64.exe runs), `MT5_SERVER_TIMEZONE` (`<IANA>` or
+`<IANA>±H[:MM]`, e.g. `America/New_York+7` for US-DST brokers such as FTMO) converting every deal/candle with the offset
+in force at that moment (fixes DST and weekends), mixed entry sides skipped, history end bound. The live smoke with a
+real logged-in terminal moved to the owner's test guide (owner request).
+
+**Carried to later work:** zone sanity check is one-sided (a stale tick can't prove a zone is behind); A→B→A account
+switch during sync undetectable; link 200/201 race; no OpenAPI bearer scheme; no HTTP test for journal 401 forwarding;
+`count` → VALIDATION_ERROR; AsyncClient per ingest; static service key without rotation; no-market-data path resets the
+session; reversal (INOUT) positions reported as skipped instead of split.
