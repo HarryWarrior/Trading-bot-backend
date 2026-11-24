@@ -45,8 +45,9 @@ All KPIs use the **net** result of a trade (`profit + commission + swap`).
   events at or before its own first trade; otherwise all three are `null` (another account's
   deposit is never the base of trades without balance data).
 - `max_drawdown_pct` = `max_drawdown` / peak at that point x 100, within [-100, 0]. It is `null`
-  without a known starting balance, when the peak is not positive, and when equity fell below 0
-  (losses beyond the recorded balance mean balance data is incomplete; never clamped to -100).
+  without a known starting balance, when the peak is not positive, and when equity is ever below 0
+  during the walk (losses beyond the recorded balance mean balance data is incomplete; never
+  clamped to -100).
 - `/equity`: when the starting balance is known, the first point is the starting balance at the time of
   the first balance event; then one point per trade (at close time) and per later balance event. Without
   a known starting balance the curve starts from 0, every balance event is a point, and there is no

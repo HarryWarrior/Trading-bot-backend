@@ -24,6 +24,7 @@ class EquityWalk:
     points: list[EquityPoint]
     max_drawdown: Decimal  # <= 0
     max_drawdown_peak: Decimal  # running peak at the worst point
+    went_negative: bool  # equity was below 0 at some point: balance data is incomplete
 
 
 def _every_traded_account_is_funded(dataset: Dataset) -> bool:
@@ -75,6 +76,7 @@ def walk_equity(dataset: Dataset) -> EquityWalk:
     peak = equity
     worst = ZERO
     worst_peak = peak
+    went_negative = equity < 0
     points: list[EquityPoint] = []
     for time, kind, amount in events:
         equity += amount
@@ -82,6 +84,7 @@ def walk_equity(dataset: Dataset) -> EquityWalk:
             peak += amount
         peak = max(peak, equity)
         points.append(EquityPoint(time, equity))
+        went_negative = went_negative or equity < 0
         drawdown = equity - peak
         if drawdown < worst:
             worst = drawdown
@@ -92,4 +95,5 @@ def walk_equity(dataset: Dataset) -> EquityWalk:
         points=points,
         max_drawdown=worst,
         max_drawdown_peak=worst_peak,
+        went_negative=went_negative,
     )

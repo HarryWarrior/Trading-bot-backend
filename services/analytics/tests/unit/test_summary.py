@@ -308,3 +308,21 @@ def test_losses_beyond_the_balance_give_no_pct():
     s = summarize(dataset)
     assert s.max_drawdown == D("-350.00")
     assert s.max_drawdown_pct is None
+
+
+def test_equity_ever_below_zero_gives_no_pct():
+    # 100 -> -150 (equity -50: balance data incomplete) -> deposit 1000 (950) -> -200 (750).
+    # The worst-point pct alone would be -350 / 1100 = -31.82%.
+    dataset = Dataset(
+        trades=[
+            make_trade("2025-02-01 10:00:00", "-150"),
+            make_trade("2025-02-03 10:00:00", "-200"),
+        ],
+        balance_events=[
+            make_balance("2025-01-31 09:00:00", "100"),
+            make_balance("2025-02-02 09:00:00", "1000"),
+        ],
+    )
+    s = summarize(dataset)
+    assert s.max_drawdown == D("-350.00")
+    assert s.max_drawdown_pct is None

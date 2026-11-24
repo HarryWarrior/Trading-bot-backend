@@ -78,11 +78,9 @@ def summarize(dataset: Dataset) -> Summary:
 
     walk = walk_equity(dataset)
     drawdown_pct = None
-    if walk.starting_balance is not None and walk.max_drawdown_peak > 0:
+    # Equity below zero at any point means the balance data is incomplete: never invent a pct.
+    if walk.starting_balance is not None and walk.max_drawdown_peak > 0 and not walk.went_negative:
         drawdown_pct = walk.max_drawdown / walk.max_drawdown_peak * HUNDRED
-        if drawdown_pct < -HUNDRED:
-            # Equity went below zero: the balance data is incomplete. Never invent a number.
-            drawdown_pct = None
 
     win_streak, loss_streak = _longest_streaks(nets)
     return Summary(
