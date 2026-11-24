@@ -37,8 +37,14 @@ $secrets = @{}
 foreach ($svc in $services) {
     $secrets[$svc.Name] = Get-EnvValue (Join-Path $root ("services\" + $svc.Dir + "\.env")) "JWT_SECRET_KEY"
 }
+$missing = @($services | Where-Object { [string]::IsNullOrEmpty($secrets[$_.Name]) } | ForEach-Object { $_.Name })
+if ($missing.Count -gt 0) {
+    Write-Error ("missing JWT_SECRET_KEY in " + ($missing -join ", "))
+    exit 1
+}
 $reference = $services[0].Name
-$differing = @($services | Where-Object { $secrets[$_.Name] -ne $secrets[$reference] } | ForEach-Object { $_.Name })
+# -cne: secrets are case-sensitive.
+$differing = @($services | Where-Object { $secrets[$_.Name] -cne $secrets[$reference] } | ForEach-Object { $_.Name })
 if ($differing.Count -gt 0) {
     Write-Error ("JWT_SECRET_KEY of " + ($differing -join ", ") + " differs from " + $reference + ". All services must share the same value.")
     exit 1

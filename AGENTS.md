@@ -20,7 +20,7 @@ or by an AI agent).
 | Area | Today | Target |
 |---|---|---|
 | Code layout | Legacy FastAPI monolith in `app/` | One service per tool in `services/<name>/` |
-| Trades storage | Latest file in `data/raw/` (single-user) | `journal` service, MongoDB, per `user_id` |
+| Trades storage | `journal` service (in progress): MongoDB, per `user_id`; legacy `app/` still reads the latest file in `data/raw/` until retired (plan 4) | `journal` is the only store; `app/` retired |
 | MT5 | Manual CSV/XLSX upload; partly simulated sync | EA bridge pushes executions (spec 002) |
 | Auth | `auth` service (port 8001, in progress); legacy `app/` still serves 8000 | `auth` service issues JWT, services verify locally (spec 001) |
 
@@ -39,7 +39,7 @@ AGENTS.md  CLAUDE.md  GEMINI.md     # agent entry points (the last two point her
 .agents/rules/                      # how we build — read before coding
 .agents/templates/                  # spec, plan and ADR templates
 services/_template/                 # canonical hexagonal service: COPY THIS for new services
-services/<name>/                    # one folder per service (planned: auth, journal, analytics, mt5-bridge…)
+services/<name>/                    # one folder per service (in progress: auth, journal, analytics; planned: mt5-bridge…)
 libs/shared/                        # trading_shared: envelope, errors, settings, logging, auth, mongo, request_id (cross-cutting only)
 app/  tests/                        # legacy monolith and its tests (frozen)
 docs/                               # architecture, services catalog, ADRs, integrations research
