@@ -24,16 +24,18 @@ Status and ownership: [services-catalog.md](services-catalog.md).
 
 ```mermaid
 flowchart TB
-  gw[Gateway /api/v1/&lt;service&gt;] --> auth & journal & analytics & bridge & strat & bt & exec & ai
+  gw[Gateway /api/v1/&lt;service&gt;] --> auth & journal & analytics & mt5 & bridge & strat & bt & exec & ai
   auth[auth<br/>users, sessions, JWT]
   journal[journal<br/>trades, notes, tags]
   analytics[analytics<br/>KPIs from journal]
+  mt5[mt5<br/>terminal adapter, Windows host]
   bridge[mt5-bridge<br/>EA ingest tokens, deals]
   strat[strategies]
   bt[backtester]
   exec[execution<br/>paper/live, risk, kill switch]
   ai[journal-ai / MCP server]
   bridge -->|HTTP| journal
+  mt5 -->|HTTP ingest| journal
   analytics -->|HTTP| journal
   ai -->|HTTP| journal
   exec -->|commands| bridge
@@ -88,6 +90,7 @@ df["streak_group"] = (df["sign"] != df["sign"].shift()).cumsum()
 |---|---|
 | `libs/shared`, service template, agent rules | 000 (done in `feat/agents-foundation`) |
 | Gateway + compose, `auth`, `journal`, `analytics` services; security debt fixed; `app/` retired | 001 (`auth`, `journal`, `analytics` built, in progress; gateway, compose and `app/` retirement pending) |
+| `mt5` service (terminal adapter, [ADR 0004](adr/0004-mt5-terminal-adapter.md); built, in progress) | 001 |
 | `mt5-bridge` + MQL5 EA; automatic sync into `journal` | 002 |
 | `strategies`, `backtester`, `execution` (paper → live) | 003 |
 | AI-filled journal via MCP/API | 004 |

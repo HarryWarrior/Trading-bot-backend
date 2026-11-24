@@ -23,6 +23,12 @@
 - `services/journal` (port 8002, `journal_db`): MT5 HTML/XLSX and flat CSV/XLSX report parsers, idempotent per-user trade and balance-event import, trades/accounts/dataset queries, MT5 ingest endpoint. Uses `python-multipart` 0.0.20.
 - `services/analytics` (port 8003, stateless): KPI summary, equity/drawdown, daily, monthly, by-symbol and hourly stats computed from the journal API (503 `JOURNAL_UNAVAILABLE` when journal is down).
 - Root pytest config: `asyncio_mode = "auto"`, `--import-mode=importlib`, default `-m 'not private'`; `-m private` reads real reports from git-ignored `data/private/`.
+- `services/mt5` (port 8004, `mt5_db`): attaches to the open, logged-in MetaTrader 5 terminal on the Windows host (ADR 0004); admin-only link, status, sync and unlink of the terminal account, closed-trade sync into journal, and candles (`/rates`). No broker credentials are stored.
+- journal: service-to-service ingest authenticated with `INGEST_SERVICE_KEY` (shared with mt5; at least 32 characters).
+- `MetaTrader5` Python package dependency (Windows only) for `services/mt5`.
+- pytest marker `live` (needs a running, logged-in MT5 terminal; run with `-m live`, deselected by default).
+- `scripts/dev.ps1`: starts mt5 (8004) and refuses to start if `INGEST_SERVICE_KEY` of journal and mt5 is missing or differs.
+- ADR 0004: MT5 terminal adapter.
 
 ### Changed
 - Sample data moved to `data/samples/`; real reports go in git-ignored `data/private/`.

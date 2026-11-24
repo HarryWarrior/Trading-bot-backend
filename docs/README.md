@@ -19,3 +19,4 @@ Start with [`AGENTS.md`](../AGENTS.md) for the product, stack, commands and gold
 | [0001](adr/0001-hexagonal-microservices.md) | Every tool is a microservice with hexagonal architecture |
 | [0002](adr/0002-mt5-ea-bridge.md) | MT5 connectivity through an EA bridge; no broker passwords stored |
 | [0003](adr/0003-two-repos-docs-in-repo.md) | Two repos (backend, frontend); docs, specs and agent rules live in each |
+| [0004](adr/0004-mt5-terminal-adapter.md) | MT5 terminal adapter: attach to the open logged-in terminal, no credentials stored |

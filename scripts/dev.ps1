@@ -10,11 +10,12 @@ if (-not (Test-Path $python)) {
     exit 1
 }
 
-# Plans 3-4 add entries here: Name, Dir (under services/), Port, Module (uvicorn app path).
+# Plan 4 adds entries here: Name, Dir (under services/), Port, Module (uvicorn app path).
 $services = @(
     @{ Name = "auth"; Dir = "auth"; Port = 8001; Module = "auth_service.main:app" },
     @{ Name = "journal"; Dir = "journal"; Port = 8002; Module = "journal_service.main:app" },
-    @{ Name = "analytics"; Dir = "analytics"; Port = 8003; Module = "analytics_service.main:app" }
+    @{ Name = "analytics"; Dir = "analytics"; Port = 8003; Module = "analytics_service.main:app" },
+    @{ Name = "mt5"; Dir = "mt5"; Port = 8004; Module = "mt5_service.main:app" }
 )
 if ($Only.Count -gt 0) { $services = @($services | Where-Object { $Only -contains $_.Name }) }
 if ($services.Count -eq 0) { Write-Error "No matching services."; exit 1 }
@@ -48,6 +49,24 @@ $differing = @($services | Where-Object { $secrets[$_.Name] -cne $secrets[$refer
 if ($differing.Count -gt 0) {
     Write-Error ("JWT_SECRET_KEY of " + ($differing -join ", ") + " differs from " + $reference + ". All services must share the same value.")
     exit 1
+}
+
+# journal and mt5 must share INGEST_SERVICE_KEY (compared case-sensitively, never printed).
+$ingest = @($services | Where-Object { @("journal", "mt5") -contains $_.Name })
+if ($ingest.Count -eq 2) {
+    $keys = @{}
+    foreach ($svc in $ingest) {
+        $keys[$svc.Name] = Get-EnvValue (Join-Path $root ("services\" + $svc.Dir + "\.env")) "INGEST_SERVICE_KEY"
+    }
+    $noKey = @($ingest | Where-Object { [string]::IsNullOrEmpty($keys[$_.Name]) } | ForEach-Object { $_.Name })
+    if ($noKey.Count -gt 0) {
+        Write-Error ("missing INGEST_SERVICE_KEY in " + ($noKey -join ", "))
+        exit 1
+    }
+    if ($keys["mt5"] -cne $keys["journal"]) {
+        Write-Error "INGEST_SERVICE_KEY of mt5 differs from journal. Both services must share the same value."
+        exit 1
+    }
 }
 
 $procs = @()
