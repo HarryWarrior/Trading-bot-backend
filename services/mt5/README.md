@@ -27,7 +27,7 @@ is imported lazily: the service starts without a terminal (and on other OSes) an
 Linking, syncing and unlinking require role `admin`. One terminal account can be linked to only one
 user (`ACCOUNT_ALREADY_LINKED` 409 for anyone else). Sync forwards the caller's own access token to
 the journal, plus the shared `X-Service-Key`. Error codes: `TERMINAL_NOT_AVAILABLE` 409,
-`TERMINAL_ACCOUNT_MISMATCH` 409, `ACCOUNT_ALREADY_LINKED` 409, `NOT_FOUND` 404,
+`TERMINAL_ACCOUNT_MISMATCH` 409, `MULTIPLE_TERMINALS` 409, `SERVER_TIMEZONE_MISMATCH` 409, `ACCOUNT_ALREADY_LINKED` 409, `NOT_FOUND` 404,
 `SYMBOL_NOT_FOUND` 404, `INVALID_TIMEFRAME` 422, `JOURNAL_UNAVAILABLE` 503, `FORBIDDEN` 403.
 
 ## Environment variables
@@ -41,19 +41,34 @@ See `.env.example` (copy to the git-ignored `.env`).
 | `JOURNAL_URL` | default `http://localhost:8002` |
 | `MONGODB_URL`, `DATABASE_NAME` | default `mongodb://localhost:27017`, `mt5_db` |
 | `CORS_ORIGINS`, `ENVIRONMENT`, `LOG_LEVEL` | as in the other services |
-| `MT5_SERVER_UTC_OFFSET_MINUTES` | optional, -720..840 |
+| `MT5_SERVER_TIMEZONE` | recommended, IANA zone of the broker server clock, e.g. `Europe/Athens` |
+| `MT5_SERVER_UTC_OFFSET_MINUTES` | optional, -720..840; ignored when `MT5_SERVER_TIMEZONE` is set |
 
-### Broker server time and `MT5_SERVER_UTC_OFFSET_MINUTES`
+### Broker server time: `MT5_SERVER_TIMEZONE` (recommended)
 
-MT5 deal and candle times are broker server time, not UTC. By default the offset is detected as
-`round_to_30min(latest_tick_server_time - utc_now)`. That relies on a fresh tick: when the market
-is closed (weekends) or the symbol is stale, the last tick is old and the detection is wrong or
-rejected. Set `MT5_SERVER_UTC_OFFSET_MINUTES` explicitly in that case. Brokers such as FTMO use
-GMT+2 in winter and GMT+3 in summer: `120` or `180`.
+MT5 deal and candle times are broker server time, not UTC. Set `MT5_SERVER_TIMEZONE` to the IANA
+zone of the broker clock; brokers on EET such as FTMO use `Europe/Athens` (GMT+2 in winter, GMT+3
+in summer). Every deal and candle is converted with the offset in force at ITS OWN timestamp, so a
+history that spans DST changes is correct, and no market data is needed, so it also works on
+weekends. Wall-clock times that happen twice or never at a DST change are resolved with `fold=0`
+(first occurrence / offset before the jump).
 
-Caveat: one offset applies to the WHOLE history. A broker that observes daylight saving time
-shifts by an hour twice a year, so deals made on the other side of a DST change are off by one
-hour in UTC. A fixed override does not fix this; it only avoids stale-tick errors.
+When a live tick is available the zone is sanity-checked: a tick AHEAD of the zone's current time
+by more than 10 minutes cannot be real, and the call answers `SERVER_TIMEZONE_MISMATCH` (409). A
+zone set too far ahead of the real broker time looks like a stale tick and is not detected.
+
+Without `MT5_SERVER_TIMEZONE` the offset is detected as
+`round_to_30min(latest_tick_server_time - utc_now)` (needs a fresh tick; rejected when the market
+is closed) or taken from the fixed `MT5_SERVER_UTC_OFFSET_MINUTES` (e.g. `120`/`180`). Both apply
+ONE offset to the whole history, so deals on the other side of a DST change are off by one hour.
+
+## One terminal, never launched
+
+The service attaches to the terminal that is ALREADY open (ADR 0004). `MetaTrader5.initialize()`
+would start `terminal64.exe` if none were running, so a process probe (`psutil`) looks first: no
+terminal -> `TERMINAL_NOT_AVAILABLE` ("MT5 terminal is not running") without calling initialize;
+more than one -> `MULTIPLE_TERMINALS`; exactly one -> `initialize(path=<that terminal>)`. Keep a
+single terminal open. A terminal whose executable path the OS hides from this process is ignored.
 
 ## Rules implemented in the domain
 

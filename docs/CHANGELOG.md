@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed (plan 3 final review)
+- mt5: never launches the terminal (process probe via `psutil`, `initialize(path=...)` only for exactly one running terminal; new `MULTIPLE_TERMINALS` 409); new `MT5_SERVER_TIMEZONE` (IANA, needs `tzdata` on Windows) converts deals and candles per timestamp (DST and weekend safe, `SERVER_TIMEZONE_MISMATCH` 409 when it contradicts the live tick); history end bound is local now + 2 days; positions with entry deals of both sides are skipped (`mixed entry sides`).
+
 ### Changed (plan 2 final review)
 - analytics: withdrawals/adjustments shift the equity peak (only trades create drawdown); starting balance, ending balance and drawdown % are `null` unless every traded account in scope has balance data, and drawdown % is `null` if equity ever goes below 0.
 - journal: MT5 correction/charge/bonus/commission-type deals become signed `adjustment` balance events; unknown deal types are reported in `skipped_rows`; the account-summary block after Deals is ignored; skipped rows report absolute file/sheet row numbers; flat-file uploads share the stable account ref `upload` (overlapping re-imports never duplicate).
