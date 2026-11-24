@@ -20,8 +20,9 @@ TRADE = {
     "open_time": "2026-01-05T09:00:00Z",
     "close_time": "2026-01-05T10:00:00Z",
     "net": 12.34,
+    "account_ref": "123@Live",
 }
-EVENT = {"time": "2026-01-01T00:00:00+00:00", "amount": -5.5}
+EVENT = {"time": "2026-01-01T00:00:00+00:00", "amount": -5.5, "account_ref": "upload"}
 
 
 def source_for(handler) -> JournalHttpTradeSource:
@@ -46,6 +47,8 @@ async def test_maps_payload_forwards_header_and_query():
     assert dataset.trades[0].net == Decimal("12.34")
     assert dataset.trades[0].close_time.utcoffset() is not None
     assert dataset.balance_events[0].amount == Decimal("-5.5")
+    assert dataset.trades[0].account_ref == "123@Live"
+    assert dataset.balance_events[0].account_ref == "upload"
 
 
 async def test_account_ref_omitted_when_none():

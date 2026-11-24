@@ -41,11 +41,16 @@ def _parse(payload: Any) -> Dataset:
             open_time=_aware_datetime(row["open_time"]),
             close_time=_aware_datetime(row["close_time"]),
             net=_money(row["net"]),
+            account_ref=str(row["account_ref"]),
         )
         for row in data["trades"]
     ]
     events = [
-        BalanceRecord(time=_aware_datetime(row["time"]), amount=_money(row["amount"]))
+        BalanceRecord(
+            time=_aware_datetime(row["time"]),
+            amount=_money(row["amount"]),
+            account_ref=str(row["account_ref"]),
+        )
         for row in data["balance_events"]
     ]
     return Dataset(trades=trades, balance_events=events)

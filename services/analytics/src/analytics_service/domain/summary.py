@@ -80,6 +80,9 @@ def summarize(dataset: Dataset) -> Summary:
     drawdown_pct = None
     if walk.starting_balance is not None and walk.max_drawdown_peak > 0:
         drawdown_pct = walk.max_drawdown / walk.max_drawdown_peak * HUNDRED
+        if drawdown_pct < -HUNDRED:
+            # Equity went below zero: the balance data is incomplete. Never invent a number.
+            drawdown_pct = None
 
     win_streak, loss_streak = _longest_streaks(nets)
     return Summary(

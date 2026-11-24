@@ -36,6 +36,7 @@ def sample_dataset() -> Dataset:
             open_time=utc(row["Open Time"]),
             close_time=utc(row["Close Time"]),
             net=Decimal(row["Profit"]),
+            account_ref="sample",
         )
         for row in rows
     ]

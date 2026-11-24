@@ -14,12 +14,14 @@ class TradeRecord:
     open_time: datetime
     close_time: datetime
     net: Decimal  # profit + commission + swap
+    account_ref: str
 
 
 @dataclass(frozen=True)
 class BalanceRecord:
     time: datetime
-    amount: Decimal  # signed: deposits > 0, withdrawals < 0
+    amount: Decimal  # signed: deposits > 0, withdrawals < 0, adjustments either way
+    account_ref: str
 
 
 @dataclass(frozen=True)

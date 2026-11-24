@@ -217,3 +217,94 @@ def test_balance_only_dataset():
     assert s.starting_balance == D("250.00")
     assert s.ending_balance == D("250.00")
     assert s.max_drawdown == D("0.00")
+
+
+def test_balance_of_another_account_is_not_a_base_for_unfunded_trades():
+    # Account X has a deposit but no trades; account Y trades without any balance data.
+    dataset = Dataset(
+        trades=[
+            make_trade("2025-02-01 10:00:00", "-50", account="Y"),
+            make_trade("2025-02-02 10:00:00", "-300", account="Y"),
+        ],
+        balance_events=[make_balance("2025-01-31 09:00:00", "100", account="X")],
+    )
+    s = summarize(dataset)
+    assert s.starting_balance is None
+    assert s.ending_balance is None
+    assert s.max_drawdown_pct is None
+    assert s.max_drawdown == D("-350.00")
+
+
+def test_account_funded_only_after_its_first_trade_makes_balance_unknown():
+    dataset = Dataset(
+        trades=[
+            make_trade("2025-02-01 10:00:00", "100", account="A"),
+            make_trade("2025-02-02 10:00:00", "-20", account="B"),
+        ],
+        balance_events=[
+            make_balance("2025-01-31 09:00:00", "1000", account="A"),
+            make_balance("2025-02-03 09:00:00", "500", account="B"),
+        ],
+    )
+    s = summarize(dataset)
+    assert s.starting_balance is None
+    assert s.ending_balance is None
+    assert s.max_drawdown_pct is None
+
+
+def test_two_funded_accounts_are_combined():
+    # A: 1000, B: 500 -> 1500. A +100 (1600 peak), B -300 (1300), A -100 (1200: dd -400 = -25%),
+    # B +50 (1250).
+    dataset = Dataset(
+        trades=[
+            make_trade("2025-02-01 10:00:00", "100", account="A"),
+            make_trade("2025-02-02 10:00:00", "-300", account="B"),
+            make_trade("2025-02-03 10:00:00", "-100", account="A"),
+            make_trade("2025-02-04 10:00:00", "50", account="B"),
+        ],
+        balance_events=[
+            make_balance("2025-01-31 09:00:00", "1000", account="A"),
+            make_balance("2025-01-31 09:00:00", "500", account="B"),
+        ],
+    )
+    s = summarize(dataset)
+    assert s.starting_balance == D("1500.00")
+    assert s.ending_balance == D("1250.00")
+    assert s.max_drawdown == D("-400.00")
+    assert s.max_drawdown_pct == D("-25.00")
+    assert s.net_profit == D("-250.00")
+
+
+def test_account_funded_later_but_before_its_own_first_trade():
+    # B is funded after A's first trade but before B's own first trade: the deposit is a
+    # mid-way balance event of the combined scope. 1000 +100 (1100) +500 dep (1600, peak 1600)
+    # -300 (1300: dd -300 = -18.75%).
+    dataset = Dataset(
+        trades=[
+            make_trade("2025-02-01 10:00:00", "100", account="A"),
+            make_trade("2025-02-03 10:00:00", "-300", account="B"),
+        ],
+        balance_events=[
+            make_balance("2025-01-31 09:00:00", "1000", account="A"),
+            make_balance("2025-02-02 09:00:00", "500", account="B"),
+        ],
+    )
+    s = summarize(dataset)
+    assert s.starting_balance == D("1000.00")
+    assert s.ending_balance == D("1300.00")
+    assert s.max_drawdown == D("-300.00")
+    assert s.max_drawdown_pct == D("-18.75")
+
+
+def test_losses_beyond_the_balance_give_no_pct():
+    # Equity falls below zero (100 -> 50 -> -250): balance data must be incomplete.
+    dataset = Dataset(
+        trades=[
+            make_trade("2025-02-01 10:00:00", "-50"),
+            make_trade("2025-02-02 10:00:00", "-300"),
+        ],
+        balance_events=[make_balance("2025-01-31 09:00:00", "100")],
+    )
+    s = summarize(dataset)
+    assert s.max_drawdown == D("-350.00")
+    assert s.max_drawdown_pct is None
