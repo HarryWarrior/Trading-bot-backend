@@ -48,17 +48,18 @@ Rules that shape this picture (details in [`.agents/rules/architecture.md`](../.
 - `auth` issues JWTs; services verify them locally.
 - Events/queues only via ADR when needed.
 
-## 3. Current state (legacy `app/`)
+## 3. Current state (services)
 
-A single FastAPI app (`app/main.py`) with three routers, MongoDB database `trading_bot_db`:
+The legacy monolith `app/` is **retired** (spec 001). Four services plus `libs/shared` run today; each has its own database:
 
-| Prefix | Purpose | Notes |
-|---|---|---|
-| `/api/v1/auth` | Sign-up/in/out, email OTP, password reset, sessions, roles | bcrypt, HS256 JWT + `sessions` collection |
-| `/api/v1/analytics` | Upload CSV/XLSX, trades, filters, KPIs, timeseries, heatmap, daily/monthly stats | Reads the **latest file in `data/raw/`** — not per user |
-| `/api/v1/mt5` | MT5 accounts CRUD, sync, status, rates | Uses `MetaTrader5` package when present, **otherwise simulated data**; XOR password storage |
+| Service | Port | Database | Purpose |
+|---|---|---|---|
+| `auth` | 8001 | `auth_db` | Sign-up/in/out, email OTP, password reset, roles, JWT issuing |
+| `journal` | 8002 | `journal_db` | Per-user trades and balance events; report upload and parsing; MT5 ingest |
+| `analytics` | 8003 | none (stateless) | KPIs, equity, drawdown, daily/monthly/symbol/hourly stats from the journal API |
+| `mt5` | 8004 | `mt5_db` | Attaches to the open MT5 terminal (Windows host): link, status, sync, candles |
 
-Legacy collections: `users`, `sessions`, `verifications`, `accounts` (OAuth placeholder), `mt5_accounts`.
+Details: [services-catalog.md](services-catalog.md). Services verify JWTs locally; only `auth` signs them.
 
 ### Report ingestion (kept as domain knowledge for the journal service)
 
@@ -89,8 +90,8 @@ df["streak_group"] = (df["sign"] != df["sign"].shift()).cumsum()
 | Step | Spec |
 |---|---|
 | `libs/shared`, service template, agent rules | 000 (done in `feat/agents-foundation`) |
-| Gateway + compose, `auth`, `journal`, `analytics` services; security debt fixed; `app/` retired | 001 (`auth`, `journal`, `analytics` built, in progress; gateway, compose and `app/` retirement pending) |
-| `mt5` service (terminal adapter, [ADR 0004](adr/0004-mt5-terminal-adapter.md); built, in progress) | 001 |
+| `auth`, `journal`, `analytics` services; security debt fixed; `app/` retired | 001 (done) |
+| `mt5` service (terminal adapter, [ADR 0004](adr/0004-mt5-terminal-adapter.md)) | 001 (done) |
 | `mt5-bridge` + MQL5 EA; automatic sync into `journal` | 002 |
 | `strategies`, `backtester`, `execution` (paper → live) | 003 |
 | AI-filled journal via MCP/API | 004 |

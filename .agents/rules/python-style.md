@@ -3,7 +3,7 @@
 ## Language
 
 **English only**: identifiers, file names, docstrings, comments, log messages, error messages and
-API response strings. Legacy `app/` still contains Spanish; do not add more, translate when touched.
+API response strings.
 
 ## Formatting and linting
 

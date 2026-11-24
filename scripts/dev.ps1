@@ -1,4 +1,4 @@
-# Dev runner: starts the new services (NOT the legacy app/, run that manually on port 8000).
+# Dev runner: starts the services (auth 8001, journal 8002, analytics 8003, mt5 8004).
 # Usage: powershell -File scripts/dev.ps1 [-Only auth]
 param([string[]]$Only = @())
 

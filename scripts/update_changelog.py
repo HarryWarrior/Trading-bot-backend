@@ -13,13 +13,13 @@ from pathlib import Path
 
 
 def get_current_app_version(backend_root: Path) -> str:
-    """Extract current version string from app/main.py."""
-    main_file = backend_root / "app" / "main.py"
-    if not main_file.exists():
+    """Extract the latest released version string from docs/CHANGELOG.md."""
+    changelog = backend_root / "docs" / "CHANGELOG.md"
+    if not changelog.exists():
         return "2.0.0"
 
-    content = main_file.read_text(encoding="utf-8")
-    match = re.search(r'version=["\']([0-9]+\.[0-9]+\.[0-9]+)["\']', content)
+    content = changelog.read_text(encoding="utf-8")
+    match = re.search(r"^## \[([0-9]+\.[0-9]+\.[0-9]+)\]", content, re.MULTILINE)
     return match.group(1) if match else "2.0.0"
 
 
@@ -36,22 +36,6 @@ def bump_semver(version: str, bump_type: str = "patch") -> str:
         return f"{major}.{minor + 1}.0"
     else:
         return f"{major}.{minor}.{patch + 1}"
-
-
-def update_main_py_version(backend_root: Path, new_version: str):
-    """Update version in app/main.py."""
-    main_file = backend_root / "app" / "main.py"
-    if not main_file.exists():
-        return
-
-    content = main_file.read_text(encoding="utf-8")
-    updated_content = re.sub(
-        r'version=["\']([0-9]+\.[0-9]+\.[0-9]+)["\']',
-        f'version="{new_version}"',
-        content,
-    )
-    main_file.write_text(updated_content, encoding="utf-8")
-    print(f"✅ Updated version in app/main.py to {new_version}")
 
 
 def format_changelog_entry(version: str, date_str: str, changes: dict[str, list[str]]) -> str:
@@ -101,7 +85,9 @@ def prepend_to_changelog(file_path: Path, entry_content: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Update docs/CHANGELOG.md and bump project version.")
+    parser = argparse.ArgumentParser(
+        description="Update docs/CHANGELOG.md and bump project version."
+    )
     parser.add_argument("--version", type=str, help="Explicit version (e.g. 2.1.0)")
     parser.add_argument(
         "--bump",
@@ -158,7 +144,9 @@ def main():
 
         content = docs_changelog.read_text(encoding="utf-8")
         if f"[{current_version}]" not in content:
-            print(f"⚠️ docs/CHANGELOG.md is missing an entry for current version [{current_version}].")
+            print(
+                f"⚠️ docs/CHANGELOG.md is missing an entry for current version [{current_version}]."
+            )
             print("💡 Run 'python scripts/update_changelog.py --message \"...\"' to add it.")
             sys.exit(1)
         else:
@@ -189,9 +177,6 @@ def main():
     today_str = datetime.date.today().isoformat()
     entry = format_changelog_entry(target_version, today_str, changes)
 
-    # Update app/main.py
-    update_main_py_version(backend_root, target_version)
-
     # Update docs/CHANGELOG.md
     prepend_to_changelog(docs_changelog, entry)
 
@@ -200,7 +185,7 @@ def main():
 
 if __name__ == "__main__":
     import sys
+
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     main()
-

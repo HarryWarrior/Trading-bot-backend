@@ -19,13 +19,12 @@ or by an AI agent).
 
 | Area | Today | Target |
 |---|---|---|
-| Code layout | Legacy FastAPI monolith in `app/` | One service per tool in `services/<name>/` |
-| Trades storage | `journal` service (in progress): MongoDB, per `user_id`; legacy `app/` still reads the latest file in `data/raw/` until retired (plan 4) | `journal` is the only store; `app/` retired |
-| MT5 | `mt5` service (port 8004, Windows host, in progress) attaches to the open terminal; manual CSV/XLSX upload still works | EA bridge pushes executions (spec 002) |
-| Auth | `auth` service (port 8001, in progress); legacy `app/` still serves 8000 | `auth` service issues JWT, services verify locally (spec 001) |
+| Code layout | One service per tool in `services/<name>/` (auth, journal, analytics, mt5); the legacy `app/` monolith is retired | Same, plus gateway/compose and new tools |
+| Trades storage | `journal` service: MongoDB, per `user_id`; the only store | Same |
+| MT5 | `mt5` service (port 8004, Windows host) attaches to the open terminal; manual CSV/XLSX upload also works | EA bridge pushes executions (spec 002) |
+| Auth | `auth` service (port 8001) issues JWT; services verify locally | Same (spec 001, done) |
 
-**`app/` is frozen legacy.** Only fix bugs there. New features go into services.
-Migration is spec 001.
+Migration to services was spec 001 (done). New features go into services.
 
 ## 3. Tech stack
 
@@ -39,9 +38,9 @@ AGENTS.md  CLAUDE.md  GEMINI.md     # agent entry points (the last two point her
 .agents/rules/                      # how we build — read before coding
 .agents/templates/                  # spec, plan and ADR templates
 services/_template/                 # canonical hexagonal service: COPY THIS for new services
-services/<name>/                    # one folder per service (in progress: auth, journal, analytics, mt5; planned: mt5-bridge…)
+services/<name>/                    # one folder per service (auth, journal, analytics, mt5; planned: mt5-bridge…)
 libs/shared/                        # trading_shared: envelope, errors, settings, logging, auth, mongo, request_id (cross-cutting only)
-app/  tests/                        # legacy monolith and its tests (frozen)
+tests/                              # repo hygiene, no-fake-data guard, cross-service acceptance suite
 docs/                               # architecture, services catalog, ADRs, integrations research
 specs/NNN-slug/                     # design.md + plan.md per piece of work
 scripts/  .githooks/                # changelog script, pre-push hook
@@ -51,26 +50,18 @@ scripts/  .githooks/                # changelog script, pre-push hook
 
 ```bash
 python -m venv .venv && .venv\Scripts\activate          # Windows (source .venv/bin/activate elsewhere)
-pip install -r requirements.txt                           # legacy app
-pip install -e "libs/shared[dev]" -e "services/_template[dev]" -e "services/auth[dev]" -e "services/journal[dev]" -e "services/analytics[dev]" -e "services/mt5[dev]" ruff
-uvicorn app.main:app --reload --port 8000                 # legacy API (needs MongoDB on localhost:27017)
-uvicorn template_service.main:app --reload --port 8010    # template service
+pip install -e libs/shared -e "services/_template[dev]" -e "services/auth[dev]" -e "services/journal[dev]" -e "services/analytics[dev]" -e "services/mt5[dev]" ruff   # no root requirements.txt
 cp services/auth/.env.example services/auth/.env         # then set JWT_SECRET_KEY (git-ignored)
-cd services/auth && uvicorn auth_service.main:app --reload --port 8001   # auth service (needs MongoDB)
 cp services/journal/.env.example services/journal/.env   # and services/analytics/.env.example; all .env files (auth, journal, analytics, mt5) MUST share the same JWT_SECRET_KEY
-cd services/journal && uvicorn journal_service.main:app --reload --port 8002      # journal service (needs MongoDB)
-cd services/analytics && uvicorn analytics_service.main:app --reload --port 8003  # analytics service (reads journal via JOURNAL_URL)
 cp services/mt5/.env.example services/mt5/.env           # INGEST_SERVICE_KEY MUST equal the one in services/journal/.env (>= 32 chars)
-cd services/mt5 && uvicorn mt5_service.main:app --reload --port 8004   # mt5 service (Windows + open logged-in MT5 terminal; link/sync are admin-only)
-powershell -File scripts/dev.ps1 [-Only auth]             # dev runner: auth 8001, journal 8002, analytics 8003, mt5 8004 (checks the shared JWT secret and INGEST_SERVICE_KEY); not the legacy app
-cd services/auth && python scripts/migrate_legacy_users.py --help   # copy legacy users into auth_db (needs the venv active)
+powershell -File scripts/dev.ps1 [-Only auth]             # dev runner: auth 8001, journal 8002, analytics 8003, mt5 8004 (checks the shared JWT secret and INGEST_SERVICE_KEY)
+cd services/auth && uvicorn auth_service.main:app --reload --port 8001   # one service by hand (needs MongoDB); same pattern for journal 8002, analytics 8003 (JOURNAL_URL), mt5 8004
+uvicorn template_service.main:app --reload --port 8010    # template service
+cd services/auth && python scripts/migrate_legacy_users.py --help   # copy users of the retired legacy DB into auth_db (needs the venv active)
 cd services/auth && python scripts/promote_admin.py <email>     # grant admin role (needs the venv active)
-pytest libs/shared/tests services tests -q -rs            # everything: shared lib, all services, legacy (needs local MongoDB; expect 0 skipped)
-pytest libs/shared/tests services                         # new code only
+pytest libs/shared/tests services tests -q -rs            # everything: shared lib, services, cross-service acceptance (needs local MongoDB; expect 0 skipped)
 pytest -m live services/mt5/tests                         # local only: needs an open, logged-in MT5 terminal (default runs deselect them)
 pytest -m private services/journal/tests                  # local only: parse real reports in data/private/ (default runs deselect them)
-pytest tests                                              # legacy tests
-pytest tests/acceptance -rxX                              # status report of the legacy API: what works, known bugs (needs local MongoDB)
 ruff check . && ruff format --check .
 git config core.hooksPath .githooks                       # enable pre-push checks
 ```

@@ -6,7 +6,7 @@ Status: `active` · `in-progress` · `planned` · `legacy` · `retired`.
 | Service | Purpose | Status | Database | Routes | Spec |
 |---|---|---|---|---|---|
 | `_template` | Canonical hexagonal service to copy | active | — (in-memory) | `/api/v1/template` | [000](../specs/000-agents-foundation/design.md) |
-| `app` (legacy monolith) | Auth, analytics, MT5 accounts in one app | legacy | `trading_bot_db` | `/api/v1/auth`, `/api/v1/analytics`, `/api/v1/mt5` | [001](../specs/001-service-migration/design.md) retires it |
+| `app` (legacy monolith) | Auth, analytics, MT5 accounts in one app; replaced by `auth`, `journal`, `analytics`, `mt5` | retired | `trading_bot_db` (unused) | — | [001](../specs/001-service-migration/design.md) |
 | `auth` | Users, sessions, email OTP, roles, JWT issuing (port 8001) | in-progress | `auth_db` | `/api/v1/auth` | [001](../specs/001-service-migration/design.md) |
 | `journal` | Per-user trades and balance events; MT5/CSV/XLSX report upload and parsing (port 8002) | in-progress | `journal_db` | `/api/v1/journal` (`/imports`, `/trades`, `/accounts`, `/dataset`, `/ingest/mt5`) | [001](../specs/001-service-migration/design.md) |
 | `analytics` | KPIs, equity, drawdown, daily/monthly/symbol/hourly stats computed from journal (port 8003, stateless) | in-progress | — (reads journal API) | `/api/v1/analytics` (`/summary`, `/equity`, `/daily`, `/monthly`, `/by-symbol`, `/hourly`) | [001](../specs/001-service-migration/design.md) |

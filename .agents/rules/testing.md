@@ -40,27 +40,23 @@ async def test_list_items_isolated_by_user():
     assert total == 0
 ```
 
-## Acceptance suite (legacy `app/`)
+## Acceptance suite (cross-service)
 
-`tests/acceptance/` exercises the real legacy API end to end against a throwaway MongoDB database
-and a temporary `data/raw/` seeded from `data/samples/sample_trades.csv` (example data; real reports live in git-ignored `data/private/` and are never touched).
-
-- Passing tests = behavior that works today.
-- `@known_bug("...")` tests (`xfail(strict=True)`) describe the **correct** behavior the legacy app
-  lacks. When you fix one, it XPASSes and fails the run: remove its `@known_bug` in the same commit.
-- Found a new bug? Add a `@known_bug` test first, then fix it (or leave it documented).
+`tests/acceptance_services/` starts auth, journal, analytics and mt5 (fake terminal) in process against a
+throwaway MongoDB database and exercises the real flows end to end, including regression tests for the bugs
+of the retired legacy app. Needs local MongoDB; expect 0 skipped.
 
 ```bash
-pytest tests/acceptance -rxX     # -rxX prints the list of known bugs
+pytest tests/acceptance_services -q
 ```
 
 ## Commands
 
 ```bash
 pytest services/<name>/tests           # one service
-pytest libs/shared/tests services tests   # everything (new code + legacy)
+pytest libs/shared/tests services tests   # everything: shared lib, services, cross-service suite
 pytest -m private services/journal/tests   # local only: parse real reports from data/private/
-pytest tests                           # legacy app (frozen; keep it passing)
+pytest tests                           # repo hygiene, no-fake-data guard, cross-service acceptance
 ```
 
 A task is done only when its tests ran green in your session and you read the output.

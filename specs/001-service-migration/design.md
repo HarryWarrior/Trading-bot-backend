@@ -1,6 +1,6 @@
 # 001 — Real data only: auth, journal, analytics and MT5 services (design)
 
-- **Status:** approved (2026-11-23)
+- **Status:** done (2026-11-24)
 - **Date:** 2026-11-23
 - **Repos:** backend (this doc) · frontend counterpart: `trading-bot-frontend/specs/001-feature-migration/design.md`
 - **Branch:** `feat/001-real-data` (both repos, from `dev`)

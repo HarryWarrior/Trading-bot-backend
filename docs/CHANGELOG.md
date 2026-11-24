@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Removed
+- **BREAKING:** legacy monolith `app/` (port 8000, `trading_bot_db`), its tests (`tests/test_analytics.py`, `tests/test_mt5.py`, `tests/acceptance/`) and the root `requirements.txt`. Install per package: `pip install -e libs/shared -e "services/<name>[dev]"`. The cross-service `tests/acceptance_services/` suite covers every legacy behavior and known bug.
+- `scripts/update_changelog.py` now reads the current version from `docs/CHANGELOG.md` (it used `app/main.py`).
+
 ### Changed (plan 3 final review)
 - mt5: never launches the terminal (process probe via `psutil`, `initialize(path=...)` only for exactly one running terminal; new `MULTIPLE_TERMINALS` 409); new `MT5_SERVER_TIMEZONE` (IANA zone with optional shift such as `America/New_York+7`, needs `tzdata` on Windows) converts deals and candles per timestamp (DST and weekend safe, `SERVER_TIMEZONE_MISMATCH` 409 when it contradicts the live tick); history end bound is local now + 2 days; positions with entry deals of both sides are skipped (`mixed entry sides`).
 

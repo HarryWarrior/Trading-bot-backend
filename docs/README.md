@@ -4,7 +4,7 @@ Start with [`AGENTS.md`](../AGENTS.md) for the product, stack, commands and gold
 
 | Document | Content |
 |---|---|
-| [architecture.md](architecture.md) | System context, containers, current vs target, legacy API reference |
+| [architecture.md](architecture.md) | System context, containers, services, current vs target, reusable domain notes |
 | [services-catalog.md](services-catalog.md) | Every service: purpose, status, database, routes, spec |
 | [adr/](adr/) | Architecture decision records |
 | [integrations/README.md](integrations/README.md) | External repos and APIs evaluated |
