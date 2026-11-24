@@ -11,7 +11,12 @@ import pytest
 
 from mt5_service.adapters.outbound.mt5_terminal import MetaTrader5TerminalAdapter
 from mt5_service.domain.deals import DealEntry, DealType
-from mt5_service.domain.errors import InvalidTimeframe, SymbolNotFound, TerminalNotAvailable
+from mt5_service.domain.errors import (
+    InvalidTimeframe,
+    MultipleTerminals,
+    SymbolNotFound,
+    TerminalNotAvailable,
+)
 
 AccountInfo = namedtuple(
     "AccountInfo", "login server name currency balance equity trade_mode company"
@@ -108,9 +113,27 @@ def mt5() -> FakeMt5:
     return FakeMt5()
 
 
+EXE = r"C:\Program Files\MetaTrader 5	erminal64.exe"
+
+
+class StubProbe:
+    def __init__(self, exes: list[str] | None = None) -> None:
+        self.exes = [EXE] if exes is None else exes
+        self.calls = 0
+
+    def running_terminals(self) -> list[str]:
+        self.calls += 1
+        return list(self.exes)
+
+
 @pytest.fixture
-def adapter(mt5):
-    return MetaTrader5TerminalAdapter(module=mt5)
+def probe() -> StubProbe:
+    return StubProbe()
+
+
+@pytest.fixture
+def adapter(mt5, probe):
+    return MetaTrader5TerminalAdapter(module=mt5, probe=probe)
 
 
 async def test_not_installed_is_unavailable(monkeypatch):
@@ -132,12 +155,36 @@ async def test_not_logged_in_is_unavailable(mt5, adapter):
         await adapter.current_account()
 
 
-async def test_initialize_never_receives_credentials(mt5, adapter):
+async def test_initialize_only_receives_the_running_terminal_path(mt5, adapter):
     await adapter.current_account()
     await adapter.current_account()
     inits = [c for c in mt5.calls if c[0] == "initialize"]
     assert len(inits) == 1  # connects once, reuses the session
-    assert all(args == () and kwargs == {} for _, args, kwargs in inits)
+    assert inits == [("initialize", (), {"path": EXE})]  # never login/password/server
+
+
+async def test_no_running_terminal_never_calls_initialize(mt5, probe, adapter):
+    probe.exes = []
+    with pytest.raises(TerminalNotAvailable, match="MT5 terminal is not running"):
+        await adapter.current_account()
+    assert [c for c in mt5.calls if c[0] == "initialize"] == []  # would launch terminal64.exe
+
+
+async def test_several_running_terminals_never_calls_initialize(mt5, probe, adapter):
+    probe.exes = [EXE, r"D:\Other	erminal64.exe"]
+    with pytest.raises(MultipleTerminals) as caught:
+        await adapter.current_account()
+    assert caught.value.code == "MULTIPLE_TERMINALS" and caught.value.http_status == 409
+    assert "Other" not in str(caught.value)  # generic message, no paths
+    assert [c for c in mt5.calls if c[0] == "initialize"] == []
+
+
+async def test_terminal_started_later_is_attached_on_the_next_call(mt5, probe, adapter):
+    probe.exes = []
+    with pytest.raises(TerminalNotAvailable):
+        await adapter.current_account()
+    probe.exes = [EXE]
+    assert (await adapter.current_account()).login == 123456
 
 
 async def test_failed_initialize_is_retried_next_call(mt5, adapter):
@@ -194,12 +241,14 @@ async def test_history_deals_mapping(mt5, adapter):
     assert second.fee == Decimal("-0.02") and second.position_id == 7 and second.ticket == 2
 
 
-async def test_history_deals_range_is_whole_history_up_to_tomorrow(mt5, adapter):
+async def test_history_deals_range_is_whole_history_with_a_generous_local_end(mt5, adapter):
+    # The package reads naive datetimes as LOCAL time, so the end bound is local now + 2 days:
+    # that covers any broker offset (up to UTC+14) even if the local zone is far behind it.
     before = datetime.now()
     await adapter.history_deals()
     _, (date_from, date_to), _ = next(c for c in mt5.calls if c[0] == "history_deals_get")
     assert date_from == datetime(2000, 1, 1)
-    assert before + timedelta(hours=23) < date_to < datetime.now() + timedelta(hours=25)
+    assert before + timedelta(days=2) <= date_to <= datetime.now() + timedelta(days=2)
 
 
 async def test_history_deals_none_with_ok_status_is_empty(mt5, adapter):

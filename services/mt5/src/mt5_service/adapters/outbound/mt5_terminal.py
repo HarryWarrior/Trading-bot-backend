@@ -1,8 +1,12 @@
 """BrokerTerminal adapter over the official ``MetaTrader5`` Python package.
 
 The package talks to the MT5 terminal that is already running and logged in on this machine
-(Windows only). ``initialize()`` is always called WITHOUT arguments: the account is whatever the
-terminal reports, and no credential ever passes through this service.
+(Windows only). The account is whatever the terminal reports and no credential ever passes through
+this service: ``initialize`` only ever receives ``path`` (never login/password/server).
+
+``initialize()`` would LAUNCH terminal64.exe when none is running (ADR 0004: attach to the OPEN
+terminal only), so a ``TerminalProcessProbe`` is asked first: no terminal -> TerminalNotAvailable
+without calling initialize; several -> MultipleTerminals; exactly one -> initialize(path=<its exe>).
 
 The package is not thread safe, so every call runs on one dedicated worker thread under a lock and
 is awaited through ``run_in_executor``. All epoch times MT5 returns are broker SERVER time and are
@@ -19,9 +23,16 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, TypeVar
 
+from mt5_service.adapters.outbound.psutil_probe import PsutilTerminalProbe
+from mt5_service.application.ports.terminal_probe import TerminalProcessProbe
 from mt5_service.domain.account import TerminalAccount, TradeMode
 from mt5_service.domain.deals import Candle, Deal, DealEntry, DealType
-from mt5_service.domain.errors import InvalidTimeframe, SymbolNotFound, TerminalNotAvailable
+from mt5_service.domain.errors import (
+    InvalidTimeframe,
+    MultipleTerminals,
+    SymbolNotFound,
+    TerminalNotAvailable,
+)
 
 T = TypeVar("T")
 
@@ -49,8 +60,14 @@ def _dec(value: Any) -> Decimal:
 
 
 class MetaTrader5TerminalAdapter:
-    def __init__(self, module: Any | None = None, executor: Executor | None = None) -> None:
+    def __init__(
+        self,
+        module: Any | None = None,
+        executor: Executor | None = None,
+        probe: TerminalProcessProbe | None = None,
+    ) -> None:
         self._module = module
+        self._probe = probe or PsutilTerminalProbe()
         self._executor = executor or ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="mt5-terminal"
         )
@@ -104,7 +121,12 @@ class MetaTrader5TerminalAdapter:
     def _connect(self, mt5: Any) -> None:
         if self._initialized:
             return
-        if not mt5.initialize():  # no login/password/server: attach to the running terminal
+        running = self._probe.running_terminals()
+        if not running:  # initialize() would start terminal64.exe: never call it then
+            raise TerminalNotAvailable("MT5 terminal is not running")
+        if len(running) > 1:
+            raise MultipleTerminals
+        if not mt5.initialize(path=running[0]):  # no login/password/server
             raise TerminalNotAvailable(f"terminal not available: {mt5.last_error()}")
         self._initialized = True
 
@@ -146,7 +168,9 @@ class MetaTrader5TerminalAdapter:
         )
 
     def _raw_deals(self, mt5: Any) -> list[Any]:
-        raw = mt5.history_deals_get(datetime(2000, 1, 1), datetime.now() + timedelta(days=1))
+        # The package reads naive datetimes as LOCAL time. End = local now + 2 days: generous enough
+        # to include every deal whatever the broker offset (up to UTC+14) and the local zone.
+        raw = mt5.history_deals_get(datetime(2000, 1, 1), datetime.now() + timedelta(days=2))
         if raw is None:
             if not self._is_ok(mt5):
                 raise self._fail(mt5, "cannot read deal history")

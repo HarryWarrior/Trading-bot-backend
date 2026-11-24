@@ -17,6 +17,16 @@ class TerminalNotAvailable(DomainError):
         self.reason = reason
 
 
+class MultipleTerminals(DomainError):
+    """More than one MT5 terminal is running, so there is no unambiguous one to attach to."""
+
+    code = "MULTIPLE_TERMINALS"
+    http_status = 409
+
+    def __init__(self) -> None:
+        super().__init__("More than one MetaTrader 5 terminal is running; keep only one open")
+
+
 class TerminalAccountMismatch(DomainError):
     code = "TERMINAL_ACCOUNT_MISMATCH"
     http_status = 409
