@@ -46,9 +46,10 @@ class HourStat:
 
 
 def equity_curve(dataset: Dataset) -> list[EquityPoint]:
-    """One point per trade (at close_time) and per balance event after the starting balance.
+    """One point per trade (at close_time) and per balance event not in the starting balance.
 
-    Balance events up to the first trade are the base of the first point (0 when there are none).
+    With a known starting balance, balance events up to the first trade are the base of the first
+    point; otherwise the walk starts at 0 and every balance event is a point.
     """
     return walk_equity(dataset).points
 

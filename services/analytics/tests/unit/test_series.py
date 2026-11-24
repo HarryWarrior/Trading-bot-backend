@@ -37,6 +37,21 @@ def test_equity_curve_with_balance_events():
     assert [p.equity for p in equity_curve(dataset)] == [D("1010"), D("1510"), D("1460")]
 
 
+def test_equity_curve_with_unknown_starting_balance_walks_every_balance_event():
+    # X has a deposit, Y trades without balance data: no base is assumed; the deposit is a
+    # point of the walk like any other balance event.
+    dataset = Dataset(
+        trades=[
+            make_trade("2025-02-01 10:00:00", "-50", account="Y"),
+            make_trade("2025-02-02 10:00:00", "-300", account="Y"),
+        ],
+        balance_events=[make_balance("2025-01-31 09:00:00", "100", account="X")],
+    )
+    curve = equity_curve(dataset)
+    assert [p.equity for p in curve] == [D("100"), D("50"), D("-250")]
+    assert curve[0].time == utc("2025-01-31 09:00:00")
+
+
 def test_equity_curve_empty():
     assert equity_curve(Dataset(trades=[], balance_events=[])) == []
 

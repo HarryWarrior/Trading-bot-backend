@@ -52,15 +52,19 @@ def walk_equity(dataset: Dataset) -> EquityWalk:
 
     The starting (and ending) balance is known only when every account that has trades has
     balance events at or before its own first trade; otherwise it is None, because balance
-    data of another account must not become the base of unfunded trades.
+    data of another account must not become the base of unfunded trades. In that case the walk
+    starts at 0 and every balance event, early ones included, is a point of the walk.
     """
     trades = dataset.ordered_trades()
     balances = sorted(dataset.balance_events, key=lambda event: event.time)
     first_close = trades[0].close_time if trades else None
 
     initial = [b for b in balances if first_close is None or b.time <= first_close]
-    later = balances[len(initial) :]
     known = bool(initial) and _every_traded_account_is_funded(dataset)
+    if not known:
+        # No base is assumed: the walk starts at 0 and every balance event is a point.
+        initial = []
+    later = balances[len(initial) :]
     base = sum((b.amount for b in initial), ZERO)
 
     # (time, kind, amount): kind 0 = balance, 1 = trade -> balance first on ties.
