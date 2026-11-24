@@ -71,6 +71,7 @@ async def stack(database_name):
             database_name=database_name,
             mongodb_url=MONGO_URL,
             jwt_secret_key=SECRET,
+            ingest_service_key="test-ingest-service-key-with-enough-length-0123456789",
         )
     )
     transport = httpx.ASGITransport(app=journal_app)

@@ -15,6 +15,7 @@ from journal_service.settings import JournalSettings
 
 MONGO_URL = "mongodb://localhost:27017"
 SECRET = "test-secret-key-with-enough-length-0123456789"
+SERVICE_KEY = "test-ingest-service-key-with-enough-length-0123456789"
 BASE = "/api/v1/journal"
 SAMPLE = Path(__file__).resolve().parents[4] / "data" / "samples" / "sample_trades.csv"
 
@@ -33,6 +34,10 @@ def token_for(user_id: str, secret: str = SECRET) -> str:
 
 def auth(user_id: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token_for(user_id)}"}
+
+
+def ingest_auth(user_id: str, key: str = SERVICE_KEY) -> dict[str, str]:
+    return {**auth(user_id), "X-Service-Key": key}
 
 
 @pytest.fixture
@@ -59,6 +64,7 @@ def settings(database_name) -> JournalSettings:
         mongodb_url=MONGO_URL,
         database_name=database_name,
         jwt_secret_key=SECRET,
+        ingest_service_key=SERVICE_KEY,
     )
 
 
@@ -106,7 +112,14 @@ def ingest_body(account_ref="999@Demo"):
 
 def test_settings_reject_short_secret():
     with pytest.raises(ValidationError):
-        JournalSettings(_env_file=None, jwt_secret_key="short")
+        JournalSettings(_env_file=None, jwt_secret_key="short", ingest_service_key=SERVICE_KEY)
+
+
+def test_settings_require_a_long_ingest_service_key():
+    with pytest.raises(ValidationError):
+        JournalSettings(_env_file=None, jwt_secret_key=SECRET)
+    with pytest.raises(ValidationError):
+        JournalSettings(_env_file=None, jwt_secret_key=SECRET, ingest_service_key="short")
 
 
 def test_health_is_public(client):
@@ -306,7 +319,7 @@ def test_accounts(client):
 
 
 def test_ingest_twice_then_dataset(client):
-    headers = auth("alice")
+    headers = ingest_auth("alice")
     first = client.post(f"{BASE}/ingest/mt5", json=ingest_body(), headers=headers)
     assert first.status_code == 200
     assert first.json()["data"] == {"created": 1, "updated": 0, "balance_events": 1}
@@ -331,7 +344,7 @@ def test_ingest_twice_then_dataset(client):
 
 
 def test_ingest_accepts_adjustment_events(client):
-    headers = auth("alice")
+    headers = ingest_auth("alice")
     body = ingest_body()
     body["balance_events"].append(
         {
@@ -353,15 +366,47 @@ def test_ingest_accepts_adjustment_events(client):
 def test_ingest_rejects_naive_times(client):
     body = ingest_body()
     body["trades"][0]["open_time"] = "2026-01-01T08:00:00"
-    response = client.post(f"{BASE}/ingest/mt5", json=body, headers=auth("alice"))
+    response = client.post(f"{BASE}/ingest/mt5", json=body, headers=ingest_auth("alice"))
     assert response.status_code == 422
 
 
 def test_money_rounded_prices_not(client):
     body = ingest_body()
     body["trades"][0].update({"profit": 10.456, "commission": -0.004, "open_price": 1.123456})
-    client.post(f"{BASE}/ingest/mt5", json=body, headers=auth("alice"))
+    client.post(f"{BASE}/ingest/mt5", json=body, headers=ingest_auth("alice"))
     trade = client.get(f"{BASE}/dataset", headers=auth("alice")).json()["data"]["trades"][0]
     assert trade["profit"] == 10.46
     assert trade["commission"] == 0.0
     assert trade["open_price"] == 1.123456
+
+
+def test_ingest_without_service_key_is_403(client):
+    response = client.post(f"{BASE}/ingest/mt5", json=ingest_body(), headers=auth("alice"))
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "FORBIDDEN"
+
+
+def test_ingest_with_wrong_service_key_is_403_and_writes_nothing(client):
+    response = client.post(
+        f"{BASE}/ingest/mt5", json=ingest_body(), headers=ingest_auth("alice", key="x" * 40)
+    )
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "FORBIDDEN"
+    assert client.get(f"{BASE}/dataset", headers=auth("alice")).json()["data"]["trades"] == []
+
+
+def test_ingest_checks_the_key_before_the_body(client):
+    response = client.post(f"{BASE}/ingest/mt5", json={"bad": 1}, headers=auth("alice"))
+    assert response.status_code == 403
+
+
+def test_ingest_still_requires_a_token_with_a_valid_key(client):
+    response = client.post(
+        f"{BASE}/ingest/mt5", json=ingest_body(), headers={"X-Service-Key": SERVICE_KEY}
+    )
+    assert response.status_code == 401
+
+
+def test_ingest_with_right_key_is_200(client):
+    response = client.post(f"{BASE}/ingest/mt5", json=ingest_body(), headers=ingest_auth("alice"))
+    assert response.status_code == 200

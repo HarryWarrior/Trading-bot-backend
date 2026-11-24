@@ -72,6 +72,17 @@ class CountOutOfRange(DomainError):
         self.count = count
 
 
+class Unauthenticated(DomainError):
+    """The access token was not accepted (by the journal, when forwarded)."""
+
+    code = "UNAUTHENTICATED"
+    http_status = 401
+
+    def __init__(self, reason: str = "The access token was rejected") -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
 class JournalUnavailable(DomainError):
     code = "JOURNAL_UNAVAILABLE"
     http_status = 503

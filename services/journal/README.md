@@ -33,10 +33,10 @@ All routes live under `/api/v1/journal` and require `Authorization: Bearer <acce
 | `GET` | `/trades/{id}` | 404 `NOT_FOUND` when missing or owned by someone else |
 | `GET` | `/accounts` | accounts with trade counts and first/last close |
 | `GET` | `/dataset?account_ref=` | `{trades, balance_events}`, unpaginated, for analytics |
-| `POST` | `/ingest/mt5` | `{account_ref, trades, balance_events}` -> `{created, updated, balance_events}` (idempotent; `balance_events` counts new events only) |
+| `POST` | `/ingest/mt5` | requires header `X-Service-Key` (else 403 `FORBIDDEN`) plus the user token; `{account_ref, trades, balance_events}` -> `{created, updated, balance_events}` (idempotent; `balance_events` counts new events only) |
 
 Errors: `DUPLICATE_IMPORT` 409 (`details.import_id`), `UNSUPPORTED_FILE` 400, `FILE_TOO_LARGE` 413,
-`UNREADABLE_REPORT` 400 (`details.reason`), `NOT_FOUND` 404, `UNAUTHENTICATED` 401.
+`UNREADABLE_REPORT` 400 (`details.reason`), `NOT_FOUND` 404, `UNAUTHENTICATED` 401, `FORBIDDEN` 403 (ingest without a valid service key).
 Money fields are rounded to 2 decimals in responses; prices and volume are not.
 
 ## Report formats
@@ -78,7 +78,7 @@ which affects `POST /imports`). Run the service on localhost only until plan 4 u
 
 ```bash
 pip install -e "libs/shared[dev]" -e "services/journal[dev]"
-cp services/journal/.env.example services/journal/.env     # set JWT_SECRET_KEY (same as auth)
+cp services/journal/.env.example services/journal/.env     # set JWT_SECRET_KEY (same as auth) and INGEST_SERVICE_KEY
 cd services/journal && uvicorn journal_service.main:app --reload --port 8002   # needs MongoDB
 pytest services/journal/tests           # integration tests skip without MongoDB
 pytest services/journal/tests -m private  # optional: parses real reports in data/private/
@@ -89,6 +89,7 @@ pytest services/journal/tests -m private  # optional: parses real reports in dat
 | Variable | Default | Notes |
 |---|---|---|
 | `JWT_SECRET_KEY` | required | >= 32 characters, same value as `auth` |
+| `INGEST_SERVICE_KEY` | required | >= 32 characters; the same value is configured in the mt5 service; generate with `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
 | `MONGODB_URL` | `mongodb://localhost:27017` | |
 | `DATABASE_NAME` | `journal_db` | |
 | `CORS_ORIGINS` | `["http://localhost:3000"]` | JSON list |

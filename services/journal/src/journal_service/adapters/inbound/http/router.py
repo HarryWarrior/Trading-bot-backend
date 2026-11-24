@@ -1,3 +1,4 @@
+import hmac
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -63,6 +64,14 @@ def register_journal_error_mapping(app: FastAPI) -> None:
 def _current_user(request: Request) -> CurrentUser:
     secret = request.app.state.container.settings.jwt_secret_key.get_secret_value()
     return current_user_dependency(lambda: secret)(request.headers.get("authorization"))
+
+
+def _service_key(request: Request, _user: CurrentUser = Depends(_current_user)) -> None:
+    """Machine-to-machine guard for ingest: runs after authentication, before the body is parsed."""
+    expected = request.app.state.container.settings.ingest_service_key.get_secret_value()
+    given = request.headers.get("x-service-key", "")
+    if not hmac.compare_digest(given.encode("utf-8"), expected.encode("utf-8")):
+        raise AppError("FORBIDDEN", "A valid service key is required", status.HTTP_403_FORBIDDEN)
 
 
 def _aware(value: datetime | None) -> datetime | None:
@@ -189,7 +198,7 @@ async def get_dataset(
     return ok(out, container.settings.version)
 
 
-@router.post("/ingest/mt5")
+@router.post("/ingest/mt5", dependencies=[Depends(_service_key)])
 async def ingest_mt5(
     body: IngestRequest,
     user: CurrentUser = Depends(_current_user),
