@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "analytics-service"
+version = "0.1.0"
+description = "Analytics service: KPIs, equity and breakdowns computed from journal data."
+requires-python = ">=3.11"
+# trading-shared is installed editable from libs/shared (see README).
+dependencies = [
+    "trading-shared",
+    "fastapi==0.104.1",
+    "uvicorn==0.24.0",
+    "httpx==0.25.2",
+]
+
+[project.optional-dependencies]
+# journal-service is a TEST-only dependency (end-to-end test); production code never imports it.
+# Install it editable from services/journal first (see README).
+dev = ["pytest==7.4.3", "pytest-asyncio==0.21.1", "journal-service"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/analytics_service"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "--import-mode=importlib -m 'not private'"
+pythonpath = ["tests/unit"]
+markers = [
+    "private: reads real broker reports from data/private (never committed); run with -m private",
+]

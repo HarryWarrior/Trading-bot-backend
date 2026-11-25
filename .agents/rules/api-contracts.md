@@ -72,8 +72,3 @@ Always `Depends(page_params)` (from `trading_shared.http`) — a bare `Depends()
 - Uploads and ingestion are idempotent: SHA-256 of the file, or a natural key such as
   `(user_id, account_login, deal_ticket)` for broker deals.
 - Every request carries/echoes `X-Request-ID` for tracing *(middleware planned, spec 001)*.
-
-## Legacy gaps (`app/`, fixed by spec 001)
-
-- Endpoints return raw objects or partial envelopes; collections are not paginated uniformly.
-- Analytics reads the most recent file in `data/raw/` regardless of user.

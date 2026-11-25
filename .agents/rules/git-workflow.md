@@ -27,8 +27,8 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `ci`. Scope =
 git commit -m "feat(mt5-bridge): add idempotent deal ingestion endpoint"
 ```
 
-Small commits, each leaving tests green. Never commit `.env`, credentials, `data/raw/` personal
-reports with real account data, `.venv/` or `node_modules/`.
+Small commits, each leaving tests green. Never commit `.env`, credentials, `data/private/` (or `data/raw/`) personal
+reports with real account data (only `data/samples/` example data is tracked), `.venv/` or `node_modules/`.
 
 ## Pull requests
 

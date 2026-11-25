@@ -40,9 +40,3 @@ class AuthSettings(BaseServiceSettings):
 - Uploads: whitelist extensions (`.csv`, `.xlsx`, `.xls`), max 10 MB, never trust file names for paths.
 - Return `404` (not `403`) for resources owned by other users, to avoid leaking existence.
 - CORS: explicit origins from settings in production (no `*` with credentials).
-
-## Legacy gaps (`app/`, fixed by spec 001)
-
-- MT5 passwords stored with XOR + base64 using a hard-coded default key.
-- `JWT_SECRET_KEY` and MT5 key have insecure hard-coded fallbacks; CORS allows `*`.
-- MT5 sync falls back to simulated/random deals when the MetaTrader5 package is absent.

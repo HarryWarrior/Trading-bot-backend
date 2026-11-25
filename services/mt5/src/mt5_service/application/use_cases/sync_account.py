@@ -1,0 +1,59 @@
+from mt5_service.application.ports.clock import Clock
+from mt5_service.application.ports.journal import JournalGateway
+from mt5_service.application.ports.repositories import LinkedAccountRepository
+from mt5_service.application.ports.terminal import BrokerTerminal
+from mt5_service.application.server_time import resolve_converter
+from mt5_service.domain.account import SyncResult
+from mt5_service.domain.errors import AccountNotFound, TerminalAccountMismatch
+from mt5_service.domain.trades import build_trades
+
+
+class SyncAccount:
+    """Reads the full deal history and upserts closed trades into journal (idempotent)."""
+
+    def __init__(
+        self,
+        terminal: BrokerTerminal,
+        journal: JournalGateway,
+        accounts: LinkedAccountRepository,
+        clock: Clock,
+        server_utc_offset_minutes: int | None = None,
+        server_timezone: str | None = None,
+    ) -> None:
+        self._terminal = terminal
+        self._journal = journal
+        self._accounts = accounts
+        self._clock = clock
+        self._offset_override = server_utc_offset_minutes
+        self._timezone = server_timezone
+
+    async def execute(self, user_id: str, account_id: str, token: str) -> SyncResult:
+        account = await self._accounts.get(user_id, account_id)
+        if account is None:
+            raise AccountNotFound(account_id)
+        current = await self._terminal.current_account()  # TerminalNotAvailable propagates
+        if current.account_ref != account.account_ref:
+            raise TerminalAccountMismatch(account.account_ref, current.account_ref)
+
+        deals = await self._terminal.history_deals()
+        now = self._clock.now()
+        converter = await resolve_converter(
+            self._terminal, now, self._timezone, self._offset_override
+        )
+        built = build_trades(deals, converter)
+        # The terminal may have switched account while history was read: re-verify before sending.
+        again = await self._terminal.current_account()
+        if again.account_ref != account.account_ref:
+            raise TerminalAccountMismatch(account.account_ref, again.account_ref)
+        ingested = await self._journal.ingest(
+            token, account.account_ref, built.trades, built.balance_events
+        )
+        result = SyncResult(
+            created=ingested.created,
+            updated=ingested.updated,
+            balance_events=ingested.balance_events,
+            open_positions=built.open_positions,
+            skipped_positions=len(built.skipped_positions),
+        )
+        await self._accounts.mark_synced(account.id, now, result)
+        return result

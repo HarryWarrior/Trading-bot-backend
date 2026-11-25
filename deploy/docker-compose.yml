@@ -1,0 +1,87 @@
+# Local gateway stack: MongoDB + Traefik + auth/journal/analytics. Documented, not run in CI.
+#
+# mt5 is NOT a container: it must run on the Windows host next to the logged-in MetaTrader 5
+# terminal (port 8004). Traefik reaches it through host.docker.internal.
+#
+# Required environment (shell or deploy/.env, never committed):
+#   JWT_SECRET_KEY       >= 32 chars, identical for auth, journal, analytics and mt5
+#   INGEST_SERVICE_KEY   >= 32 chars, identical for journal and mt5
+#
+#   docker compose -f deploy/docker-compose.yml up --build
+services:
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  traefik:
+    image: traefik:v3.1
+    command:
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - auth
+      - journal
+      - analytics
+
+  auth:
+    build:
+      context: ..
+      dockerfile: services/auth/Dockerfile
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-local}
+      MONGODB_URL: mongodb://mongo:27017
+      DATABASE_NAME: auth_db
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY (>= 32 chars)}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      CORS_ORIGINS: '["http://localhost:3000"]'
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  journal:
+    build:
+      context: ..
+      dockerfile: services/journal/Dockerfile
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-local}
+      MONGODB_URL: mongodb://mongo:27017
+      DATABASE_NAME: journal_db
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY (>= 32 chars)}
+      INGEST_SERVICE_KEY: ${INGEST_SERVICE_KEY:?set INGEST_SERVICE_KEY (>= 32 chars)}
+      CORS_ORIGINS: '["http://localhost:3000"]'
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  analytics:
+    build:
+      context: ..
+      dockerfile: services/analytics/Dockerfile
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-local}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY (>= 32 chars)}
+      JOURNAL_URL: http://journal:8000
+      CORS_ORIGINS: '["http://localhost:3000"]'
+    depends_on:
+      - journal
+
+volumes:
+  mongo-data:

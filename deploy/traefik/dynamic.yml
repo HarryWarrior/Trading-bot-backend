@@ -1,0 +1,39 @@
+# Traefik file provider: one gateway on :8000, routing /api/v1/<service> to each service.
+# Service containers listen on port 8000 (see services/*/Dockerfile); mt5 runs on the Windows
+# host (port 8004) because it needs the open MetaTrader 5 terminal.
+http:
+  routers:
+    auth:
+      rule: PathPrefix(`/api/v1/auth`)
+      service: auth
+      entryPoints: [web]
+    journal:
+      rule: PathPrefix(`/api/v1/journal`)
+      service: journal
+      entryPoints: [web]
+    analytics:
+      rule: PathPrefix(`/api/v1/analytics`)
+      service: analytics
+      entryPoints: [web]
+    mt5:
+      rule: PathPrefix(`/api/v1/mt5`)
+      service: mt5
+      entryPoints: [web]
+
+  services:
+    auth:
+      loadBalancer:
+        servers:
+          - url: http://auth:8000
+    journal:
+      loadBalancer:
+        servers:
+          - url: http://journal:8000
+    analytics:
+      loadBalancer:
+        servers:
+          - url: http://analytics:8000
+    mt5:
+      loadBalancer:
+        servers:
+          - url: http://host.docker.internal:8004

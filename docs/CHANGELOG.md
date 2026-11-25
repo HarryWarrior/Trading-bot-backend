@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Removed
+- **BREAKING:** legacy monolith `app/` (port 8000, `trading_bot_db`), its tests (`tests/test_analytics.py`, `tests/test_mt5.py`, `tests/acceptance/`) and the root `requirements.txt`. Install per package: `pip install -e libs/shared -e "services/<name>[dev]"`. The cross-service `tests/acceptance_services/` suite covers every legacy behavior and known bug.
+- `scripts/update_changelog.py` no longer reads `app/main.py`: the root `VERSION` file (3.0.0, the version being prepared) is the single source. `--check-only` passes when the CHANGELOG has a `[VERSION]` section or a non-empty `[Unreleased]`; `--bump` releases `[Unreleased]` and writes `VERSION`.
+- Services catalog: auth, journal, analytics and mt5 are `active`.
+
+### Changed (plan 3 final review)
+- mt5: never launches the terminal (process probe via `psutil`, `initialize(path=...)` only for exactly one running terminal; new `MULTIPLE_TERMINALS` 409); new `MT5_SERVER_TIMEZONE` (IANA zone with optional shift such as `America/New_York+7`, needs `tzdata` on Windows) converts deals and candles per timestamp (DST and weekend safe, `SERVER_TIMEZONE_MISMATCH` 409 when it contradicts the live tick); history end bound is local now + 2 days; positions with entry deals of both sides are skipped (`mixed entry sides`).
+
+### Changed (plan 2 final review)
+- analytics: withdrawals/adjustments shift the equity peak (only trades create drawdown); starting balance, ending balance and drawdown % are `null` unless every traded account in scope has balance data, and drawdown % is `null` if equity ever goes below 0.
+- journal: MT5 correction/charge/bonus/commission-type deals become signed `adjustment` balance events; unknown deal types are reported in `skipped_rows`; the account-summary block after Deals is ignored; skipped rows report absolute file/sheet row numbers; flat-file uploads share the stable account ref `upload` (overlapping re-imports never duplicate).
+- root `requirements.txt` (legacy app): `python-multipart` 0.0.6 → 0.0.20.
+
 ### Added
 - `AGENTS.md`, `.agents/rules/` and `.agents/templates/`: single source of rules for AI agents (replaces `.gemini/rules`).
 - `libs/shared` (`trading_shared`): response envelope, pagination (`page_params`), error envelope, settings, logging.
@@ -10,6 +23,24 @@
 - `specs/`: spec workflow and drafts 001-004 (service migration, MT5 EA bridge, backtest-to-live, AI journal).
 
 - `tests/acceptance/`: end-to-end acceptance suite of the legacy API (28 passing behaviors, 14 known bugs as strict xfail).
+
+- `libs/shared`: `trading_shared.auth` (local JWT verification, `require_role`), `trading_shared.mongo` (Motor client, idempotent indexes) and `trading_shared.request_id` (`X-Request-ID` middleware).
+- `services/auth` (port 8001, `auth_db`): sign-up with email code, sign-in, rotating refresh tokens, sign-out, password reset, roles; codes are only logged locally when no SMTP is set.
+- `services/auth/scripts/migrate_legacy_users.py` and `promote_admin.py`.
+- `scripts/dev.ps1`: dev runner for the new services (auth, journal, analytics); refuses to start if their `JWT_SECRET_KEY` values differ.
+- `services/journal` (port 8002, `journal_db`): MT5 HTML/XLSX and flat CSV/XLSX report parsers, idempotent per-user trade and balance-event import, trades/accounts/dataset queries, MT5 ingest endpoint. Uses `python-multipart` 0.0.20.
+- `services/analytics` (port 8003, stateless): KPI summary, equity/drawdown, daily, monthly, by-symbol and hourly stats computed from the journal API (503 `JOURNAL_UNAVAILABLE` when journal is down).
+- Root pytest config: `asyncio_mode = "auto"`, `--import-mode=importlib`, default `-m 'not private'`; `-m private` reads real reports from git-ignored `data/private/`.
+- `services/mt5` (port 8004, `mt5_db`): attaches to the open, logged-in MetaTrader 5 terminal on the Windows host (ADR 0004); admin-only link, status, sync and unlink of the terminal account, closed-trade sync into journal, and candles (`/rates`). No broker credentials are stored.
+- journal: service-to-service ingest authenticated with `INGEST_SERVICE_KEY` (shared with mt5; at least 32 characters).
+- `MetaTrader5` Python package dependency (Windows only) for `services/mt5`.
+- pytest marker `live` (needs a running, logged-in MT5 terminal; run with `-m live`, deselected by default).
+- `scripts/dev.ps1`: starts mt5 (8004) and refuses to start if `INGEST_SERVICE_KEY` of journal and mt5 is missing or differs.
+- ADR 0004: MT5 terminal adapter.
+
+### Changed
+- Sample data moved to `data/samples/`; real reports go in git-ignored `data/private/`.
+- `scripts/inspect_excel.py` takes the report path as an argument.
 
 ### Removed
 - `docs/project-spec.md`, `docs/tech-spec.md` (folded into `docs/architecture.md` and `.agents/rules/`).

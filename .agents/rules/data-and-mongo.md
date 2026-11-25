@@ -6,7 +6,7 @@ MongoDB is the database for all services (one cluster; local default `mongodb://
 
 - Each service owns one logical database: `<service>_db` (e.g. `journal_db`, `auth_db`).
 - Only that service's outbound adapters touch its collections. Other services call its API.
-- Legacy `app/` uses `trading_bot_db` until spec 001 splits it.
+- The retired legacy `app/` used `trading_bot_db`; no service reads it (only the one-off `auth` migration script).
 
 ## Documents
 

@@ -11,8 +11,9 @@ Domain logic never lives here.
 | `errors.py` | `AppError`, `ErrorResponse`, `register_error_handlers` (AppError, validation, HTTP and unhandled errors) |
 | `settings.py` | `BaseServiceSettings` (env-driven) |
 | `logging.py` | `configure_logging` |
-
-Planned (spec 001): JWT verification dependency, Mongo client factory.
+| `auth.py` | `CurrentUser`, `decode_access_token`, `current_user_dependency`, `require_role`: local HS256 JWT verification (401 `UNAUTHENTICATED`, 403 `FORBIDDEN`) |
+| `mongo.py` | `create_mongo_client`, `ensure_indexes`: Motor client factory and idempotent index creation |
+| `request_id.py` | `RequestIdMiddleware`: reuses or generates `X-Request-ID` and echoes it in the response |
 
 ```bash
 pip install -e "libs/shared[dev]"
