@@ -14,6 +14,7 @@ from journal_service.domain.report_import import ReportImport
 from journal_service.domain.trade import Trade
 
 _CENT = Decimal("0.01")
+MAX_DEALS_PER_BATCH = 1000
 
 
 def money(value: Decimal) -> float:
@@ -196,3 +197,42 @@ class IngestOut(BaseModel):
     created: int
     updated: int
     balance_events: int
+
+
+class IngestDealIn(BaseModel):
+    """One raw MT5 deal as sent by the EA bridge; ``time`` is UTC (tz-aware ISO 8601)."""
+
+    ticket: int = Field(ge=0)
+    position_id: int = Field(ge=0)
+    time: AwareDatetime
+    type: int = Field(ge=0)
+    entry: int = Field(ge=0)
+    symbol: str = ""
+    volume: Decimal = Decimal(0)
+    price: Decimal = Decimal(0)
+    commission: Decimal = Decimal(0)
+    swap: Decimal = Decimal(0)
+    fee: Decimal = Decimal(0)
+    profit: Decimal = Decimal(0)
+    sl: Decimal | None = None
+    tp: Decimal | None = None
+    comment: str | None = None
+
+
+class IngestDealsRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+    account_ref: str = Field(min_length=1)
+    deals: list[IngestDealIn] = Field(default_factory=list, max_length=MAX_DEALS_PER_BATCH)
+
+
+class SkippedPositionOut(BaseModel):
+    position_id: str
+    reason: str
+
+
+class IngestDealsOut(BaseModel):
+    received: int
+    new: int
+    trades_upserted: int
+    balance_events: int
+    skipped: list[SkippedPositionOut]

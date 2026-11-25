@@ -12,14 +12,18 @@ from journal_service.adapters.inbound.http.schemas import (
     DatasetOut,
     ImportEnvelope,
     ImportOut,
+    IngestDealsOut,
+    IngestDealsRequest,
     IngestOut,
     IngestRequest,
+    SkippedPositionOut,
     TradeEnvelope,
     TradeOut,
 )
 from journal_service.application.ports.parsing import ParsedBalanceEvent, ParsedTrade
 from journal_service.application.ports.repositories import TradeFilters
 from journal_service.bootstrap import Container
+from journal_service.domain.deals import RawDeal
 from journal_service.domain.errors import DomainError, DuplicateImport, UnreadableReport
 from journal_service.domain.trade import Outcome, Side
 from trading_shared.auth import CurrentUser, current_user_dependency
@@ -66,12 +70,17 @@ def _current_user(request: Request) -> CurrentUser:
     return current_user_dependency(lambda: secret)(request.headers.get("authorization"))
 
 
-def _service_key(request: Request, _user: CurrentUser = Depends(_current_user)) -> None:
-    """Machine-to-machine guard for ingest: runs after authentication, before the body is parsed."""
+def _require_service_key(request: Request) -> None:
+    """Machine-to-machine guard: checks ``X-Service-Key`` before the body is parsed."""
     expected = request.app.state.container.settings.ingest_service_key.get_secret_value()
     given = request.headers.get("x-service-key", "")
     if not hmac.compare_digest(given.encode("utf-8"), expected.encode("utf-8")):
         raise AppError("FORBIDDEN", "A valid service key is required", status.HTTP_403_FORBIDDEN)
+
+
+def _service_key(request: Request, _user: CurrentUser = Depends(_current_user)) -> None:
+    """Guard for ``/ingest/mt5``: authentication first, then the service key."""
+    _require_service_key(request)
 
 
 def _aware(value: datetime | None) -> datetime | None:
@@ -237,3 +246,40 @@ async def ingest_mt5(
         container.settings.version,
         "History ingested",
     )
+
+
+@router.post("/ingest/deals", dependencies=[Depends(_require_service_key)])
+async def ingest_deals(
+    body: IngestDealsRequest,
+    container: Container = Depends(get_container),
+) -> SuccessResponse[IngestDealsOut]:
+    """Raw MT5 deals from the EA bridge. Service key only: the bridge names the owner in the body."""
+    deals = [
+        RawDeal(
+            ticket=d.ticket,
+            position_id=d.position_id,
+            time=d.time,
+            type=d.type,
+            entry=d.entry,
+            symbol=d.symbol,
+            volume=d.volume,
+            price=d.price,
+            commission=d.commission,
+            swap=d.swap,
+            profit=d.profit,
+            sl=d.sl,
+            tp=d.tp,
+            comment=d.comment,
+            fee=d.fee,
+        )
+        for d in body.deals
+    ]
+    result = await container.ingest_deals.execute(body.user_id, body.account_ref, deals)
+    out = IngestDealsOut(
+        received=result.received,
+        new=result.new,
+        trades_upserted=result.trades_upserted,
+        balance_events=result.balance_events,
+        skipped=[SkippedPositionOut(position_id=p, reason=r) for p, r in result.skipped],
+    )
+    return ok(out, container.settings.version, "Deals ingested")

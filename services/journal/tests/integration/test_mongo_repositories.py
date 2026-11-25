@@ -9,6 +9,7 @@ import pytest_asyncio
 
 from journal_service.adapters.outbound.mongo_repositories import (
     MongoBalanceRepository,
+    MongoDealRepository,
     MongoImportRepository,
     MongoTradeRepository,
 )
@@ -16,6 +17,7 @@ from journal_service.adapters.outbound.system_clock import SystemClock
 from journal_service.adapters.outbound.uuid_ids import UuidIdGenerator
 from journal_service.application.ports.repositories import TradeFilters
 from journal_service.domain.balance import BalanceEvent
+from journal_service.domain.deals import RawDeal
 from journal_service.domain.errors import DuplicateImport
 from journal_service.domain.report_import import ReportImport, SkippedRow
 from journal_service.domain.trade import Outcome
@@ -338,3 +340,58 @@ async def test_upsert_rejects_trade_without_natural_key(trades, make_trade):
     keyless = make_trade(position_id=None, row_hash=None)
     with pytest.raises(ValueError, match="position_id or row_hash"):
         await trades.upsert_many("u1", [keyless])
+
+
+def _raw(ticket: int, position_id: int, **overrides) -> RawDeal:
+    base = dict(
+        ticket=ticket,
+        position_id=position_id,
+        time=T0 + timedelta(minutes=ticket),
+        type=0,
+        entry=0,
+        symbol="EURUSD",
+        volume=Decimal("0.10"),
+        price=Decimal("1.12345"),
+        commission=Decimal("-0.7"),
+        swap=Decimal("0"),
+        profit=Decimal("0"),
+        sl=Decimal("1.1"),
+        tp=None,
+        comment="c",
+        fee=Decimal("-0.05"),
+    )
+    base.update(overrides)
+    return RawDeal(**base)
+
+
+async def test_deals_upsert_is_idempotent_and_round_trips(db):
+    deals = MongoDealRepository(db)
+    await deals.create_indexes()
+    batch = [_raw(1, 7), _raw(2, 7, entry=1, type=1), _raw(3, 8)]
+    assert await deals.upsert_many("u1", "acc", batch) == 3
+    assert await deals.upsert_many("u1", "acc", batch) == 0
+    assert await db["deals"].count_documents({}) == 3
+
+    got = await deals.positions_for("u1", "acc", [7])
+    assert sorted(got, key=lambda d: d.ticket) == batch[:2]
+    assert await deals.upsert_many("u1", "acc", []) == 0
+    assert await deals.positions_for("u1", "acc", []) == []
+
+
+async def test_deals_are_isolated_by_user_and_account(db):
+    deals = MongoDealRepository(db)
+    await deals.create_indexes()
+    await deals.upsert_many("u1", "acc", [_raw(1, 7)])
+    assert await deals.upsert_many("u2", "acc", [_raw(1, 7)]) == 1
+    assert await deals.upsert_many("u1", "other", [_raw(1, 7)]) == 1
+    assert len(await deals.positions_for("u1", "acc", [7])) == 1
+    assert await deals.positions_for("u3", "acc", [7]) == []
+
+
+async def test_deals_unique_index_rejects_duplicate_tickets(db):
+    deals = MongoDealRepository(db)
+    await deals.create_indexes()
+    doc = {"user_id": "u1", "account_ref": "a", "ticket": 1}
+    await db["deals"].insert_one(dict(doc))
+    with pytest.raises(pymongo.errors.DuplicateKeyError):
+        await db["deals"].insert_one(dict(doc))
