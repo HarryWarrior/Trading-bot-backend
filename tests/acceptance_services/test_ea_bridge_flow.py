@@ -105,13 +105,18 @@ async def test_second_user_sees_nothing_of_the_first(stack):
     bob = await stack.register()
     _, token = await issue_token(stack, alice)
     assert (await push(stack, token, [ENTRY, EXIT])).status_code == 200
-    await stack.bridge.post(
+    beat = await stack.bridge.post(
         f"{BRIDGE}/ingest/heartbeat",
         json={**ACCOUNT, "balance": "1", "equity": "1"},
         headers=bearer(token),
     )
+    assert beat.status_code == 200, beat.text
 
     assert len(await trades(stack, alice)) == 1
+    own_accounts = await stack.bridge.get(f"{BRIDGE}/accounts", headers=alice.headers)
+    assert len(own_accounts.json()["data"]["items"]) == 1
+    own_tokens = await stack.bridge.get(f"{BRIDGE}/tokens", headers=alice.headers)
+    assert len(own_tokens.json()["data"]["items"]) == 1
     assert await trades(stack, bob) == []
     accounts = await stack.bridge.get(f"{BRIDGE}/accounts", headers=bob.headers)
     assert accounts.json()["data"]["items"] == []
