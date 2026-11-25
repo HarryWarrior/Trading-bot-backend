@@ -29,7 +29,7 @@ Migration to services was spec 001 (done). New features go into services.
 ## 3. Tech stack
 
 Python 3.11+ · FastAPI 0.104 · Pydantic v2 · pydantic-settings · Motor/PyMongo (MongoDB) · pandas/NumPy
-(analytics) · pytest + pytest-asyncio · Ruff · Docker · Traefik gateway (planned) · MQL5 for the MT5 EA (planned).
+(analytics) · pytest + pytest-asyncio · Ruff · Docker · Traefik gateway (planned) · MQL5 EA: source written, unverified (spec 002).
 
 ## 4. Repository map
 
@@ -52,7 +52,7 @@ scripts/  .githooks/                # changelog script, pre-push hook
 python -m venv .venv && .venv\Scripts\activate          # Windows (source .venv/bin/activate elsewhere)
 pip install -e libs/shared -e "services/_template[dev]" -e "services/auth[dev]" -e "services/journal[dev]" -e "services/analytics[dev]" -e "services/mt5[dev]" -e "services/mt5-bridge[dev]" ruff   # no root requirements.txt
 cp services/auth/.env.example services/auth/.env         # then set JWT_SECRET_KEY (git-ignored)
-cp services/journal/.env.example services/journal/.env   # and services/analytics/.env.example; all .env files (auth, journal, analytics, mt5) MUST share the same JWT_SECRET_KEY
+cp services/journal/.env.example services/journal/.env   # and services/analytics/.env.example; all .env files (auth, journal, analytics, mt5, mt5-bridge) MUST share the same JWT_SECRET_KEY
 cp services/mt5/.env.example services/mt5/.env           # INGEST_SERVICE_KEY MUST equal the one in services/journal/.env (>= 32 chars)
 cp services/mt5-bridge/.env.example services/mt5-bridge/.env   # same JWT_SECRET_KEY and INGEST_SERVICE_KEY as journal
 powershell -File scripts/dev.ps1 [-Only auth]             # dev runner: auth 8001, journal 8002, analytics 8003, mt5 8004, mt5-bridge 8005 (checks the shared JWT secret and INGEST_SERVICE_KEY)

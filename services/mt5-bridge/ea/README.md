@@ -11,7 +11,9 @@ not been compiled or run yet; see [Limitations](#limitations).
 1. `OnInit`: validates the inputs, then (once the terminal is connected to an account) sends a
    **heartbeat first** (only the heartbeat creates the broker account on the server), then
    **backfills** the deal history with `HistorySelect` into a local file queue and sends it in
-   batches of at most 200 deals.
+   batches of at most 200 deals. Until one heartbeat has been accepted (API down, 5xx) nothing
+   is backfilled or flushed; the 60 s timer retries the heartbeat and the scan starts after it succeeds.
+   `OnTimer` and `OnTradeTransaction` act only while the terminal account (login and server) is the one the EA started with.
 2. `OnTradeTransaction` (`TRADE_TRANSACTION_DEAL_ADD`): re-scans the history from the high-water
    mark, queues the new deal in the file, then sends it.
 3. `OnTimer` every 60 s: heartbeat (login, server, balance, equity, terminal build), a history

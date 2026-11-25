@@ -68,6 +68,7 @@ string   g_queue_file = "";
 string   g_hwm_name = "";
 bool     g_started = false;
 bool     g_stopped = false;
+bool     g_heartbeat_ok = false;   // backfill and flushing wait for one accepted heartbeat
 bool     g_url_alerted = false;
 int      g_failures = 0;
 datetime g_next_retry = 0;        // local PC time
@@ -659,6 +660,8 @@ void SendHeartbeat()
    int status = Post(HEARTBEAT_PATH, body, reply);
    SendOutcome outcome = Classify(status);
    if(outcome == SEND_OK)
+      g_heartbeat_ok = true;
+   if(outcome == SEND_OK)
       Comment("TradingJournalBridge: connected (", g_login, " @ ", g_server, "), last heartbeat ",
               TimeToString(TimeLocal(), TIME_DATE | TIME_MINUTES));
    else if(outcome == SEND_UNAUTHORIZED)
@@ -680,6 +683,7 @@ void ResetState()
    g_hwm_name = "";
    g_started = false;
    g_stopped = false;
+   g_heartbeat_ok = false;
    g_url_alerted = false;
    g_failures = 0;
    g_next_retry = 0;
@@ -748,10 +752,13 @@ bool Startup()
    if(GlobalVariableCheck(g_hwm_name))
       g_hwm_time = (datetime)(long)GlobalVariableGet(g_hwm_name);
    g_started = true;
+   g_heartbeat_ok = false;
    Print("TradingJournalBridge: started for account ", g_login, " @ ", g_server, ", queue file MQL5\\Files\\",
          g_queue_file);
    SendHeartbeat();
-   if(g_stopped)
+   // No accepted heartbeat yet (API down, 5xx): the account may not exist, so no backfill;
+   // the timer retries the heartbeat and the scan starts once it succeeds.
+   if(g_stopped || !g_heartbeat_ok)
       return true;
    CollectNewDeals(OverlapStart(STARTUP_RESCAN_SECONDS));
    FlushQueue();
@@ -787,10 +794,12 @@ void OnTimer()
   {
    if(g_stopped)
       return;
-   if(g_started && AccountInfoInteger(ACCOUNT_LOGIN) != g_login)
+   if(g_started && (AccountInfoInteger(ACCOUNT_LOGIN) != g_login ||
+                    AccountInfoString(ACCOUNT_SERVER) != g_server))
      {
       // Another account: start over with its own queue file and high-water mark.
       g_started = false;
+      g_heartbeat_ok = false;
       g_recent_count = 0;
       ArrayResize(g_recent_tickets, 0);
       ArrayResize(g_recent_times, 0);
@@ -801,6 +810,8 @@ void OnTimer()
       return;
      }
    SendHeartbeat();
+   if(!g_heartbeat_ok)
+      return;
    // Also catches deals whose DEAL_ADD event arrived before the history had them.
    CollectNewDeals(OverlapStart(SCAN_OVERLAP_SECONDS));
    FlushQueue();
@@ -814,8 +825,10 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
   {
    if(trans.type != TRADE_TRANSACTION_DEAL_ADD)
       return;
-   if(!g_started || g_stopped)
+   if(!g_started || g_stopped || !g_heartbeat_ok)
       return;
+   if(AccountInfoInteger(ACCOUNT_LOGIN) != g_login || AccountInfoString(ACCOUNT_SERVER) != g_server)
+      return;   // account switched: the timer restarts with its own queue
    CollectNewDeals(OverlapStart(SCAN_OVERLAP_SECONDS));
    FlushQueue();
   }

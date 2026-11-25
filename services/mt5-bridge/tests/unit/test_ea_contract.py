@@ -292,3 +292,25 @@ def test_queue_lines_must_be_exactly_one_json_object():
     check = functions["IsSingleJsonObject"]
     for piece in ("in_string", "escaped", "depth++", "depth--", "depth == 0 && i != len - 1"):
         assert piece in check, piece
+
+
+def _function_body(code: str, name: str) -> str:
+    start = code.index(name + "(")
+    return code[start : code.index("\n  }\n", start)]
+
+
+def test_event_handlers_check_login_and_server_of_the_started_account():
+    code = _code_only(_ea_source())
+    for handler in ("void OnTimer", "void OnTradeTransaction"):
+        body = _function_body(code, handler)
+        assert "ACCOUNT_LOGIN" in body and "g_login" in body, handler
+        assert "ACCOUNT_SERVER" in body and "g_server" in body, handler
+
+
+def test_no_backfill_or_flush_before_the_first_heartbeat_succeeded():
+    code = _code_only(_ea_source())
+    assert "g_heartbeat_ok = true" in code
+    for name in ("bool Startup", "void OnTimer", "void OnTradeTransaction"):
+        body = _function_body(code, name)
+        assert "g_heartbeat_ok" in body, name
+        assert body.index("g_heartbeat_ok") < body.index("CollectNewDeals"), name
