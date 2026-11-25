@@ -16,6 +16,7 @@ converted to naive datetimes (never through the local time zone).
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 from collections.abc import Callable
 from concurrent.futures import Executor, ThreadPoolExecutor
@@ -57,6 +58,9 @@ def _enum(cls: type, value: Any) -> Any:
 
 def _dec(value: Any) -> Decimal:
     return Decimal(str(float(value)))
+
+
+logger = logging.getLogger(__name__)
 
 
 class MetaTrader5TerminalAdapter:
@@ -127,6 +131,7 @@ class MetaTrader5TerminalAdapter:
         if len(running) > 1:
             raise MultipleTerminals
         if not mt5.initialize(path=running[0]):  # no login/password/server
+            logger.warning("mt5.initialize failed for the running terminal: %s", mt5.last_error())
             raise TerminalNotAvailable(f"terminal not available: {mt5.last_error()}")
         self._initialized = True
 
@@ -138,6 +143,7 @@ class MetaTrader5TerminalAdapter:
     def _fail(self, mt5: Any, what: str) -> TerminalNotAvailable:
         """Drops the session (so the next call reconnects) and builds the error."""
         error = mt5.last_error()
+        logger.warning("%s: %s", what, error)  # MT5 error code only; no account data
         self._shutdown(mt5)
         return TerminalNotAvailable(f"{what}: {error}")
 
