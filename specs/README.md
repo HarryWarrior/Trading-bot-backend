@@ -10,7 +10,7 @@ design (draft) → owner approves (approved) → plan.md → execute with TDD (i
 - Folder: `specs/NNN-short-slug/` with `design.md` and, after approval, `plan.md`.
 - Templates: `.agents/templates/spec-design.md`, `.agents/templates/spec-plan.md`.
 - Numbers are shared with `trading-bot-frontend`; the backend design is the source of truth for intent.
-- **Next free number: 005.**
+- **Next free number: 006.**
 
 ## Index
 
@@ -21,3 +21,4 @@ design (draft) → owner approves (approved) → plan.md → execute with TDD (i
 | 002 | MT5 automatic sync via EA bridge | draft | [design](002-mt5-ea-bridge-sync/design.md) | yes |
 | 003 | Strategy → backtest → paper → live bot | draft | [design](003-strategy-backtest-live/design.md) | yes |
 | 004 | AI-filled journal (MCP / API) | draft | [design](004-ai-journal/design.md) | yes |
+| 005 | EA distribution, MQL5 Market and selling | draft | [design](005-ea-distribution-and-market/design.md) | no |
