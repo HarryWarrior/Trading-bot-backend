@@ -26,11 +26,13 @@ from journal_service.application.ports.repositories import AccountSummary, Trade
 from journal_service.application.use_cases.get_dataset import GetDataset
 from journal_service.application.use_cases.get_trade import GetTrade
 from journal_service.application.use_cases.import_report import ImportReport
+from journal_service.application.use_cases.ingest_deals import IngestDeals
 from journal_service.application.use_cases.ingest_mt5_history import IngestMt5History
 from journal_service.application.use_cases.list_accounts import ListAccounts
 from journal_service.application.use_cases.list_imports import ListImports
 from journal_service.application.use_cases.list_trades import ListTrades
 from journal_service.domain.balance import BalanceEvent
+from journal_service.domain.deals import RawDeal
 from journal_service.domain.report_import import ReportImport
 from journal_service.domain.trade import Side, Trade
 
@@ -172,6 +174,29 @@ class FakeImportRepository:
         return mine[start : start + page_size], len(mine)
 
 
+class FakeDealRepository:
+    def __init__(self) -> None:
+        self.rows: dict[tuple[str, str, int], RawDeal] = {}
+
+    async def upsert_many(self, user_id: str, account_ref: str, deals: list[RawDeal]) -> int:
+        new = 0
+        for deal in deals:
+            key = (user_id, account_ref, deal.ticket)
+            new += key not in self.rows
+            self.rows[key] = deal
+        return new
+
+    async def positions_for(
+        self, user_id: str, account_ref: str, position_ids: list[int]
+    ) -> list[RawDeal]:
+        wanted = set(position_ids)
+        return [
+            d
+            for (uid, ref, _), d in self.rows.items()
+            if uid == user_id and ref == account_ref and d.position_id in wanted
+        ]
+
+
 @dataclass
 class World:
     clock: FixedClock
@@ -180,6 +205,7 @@ class World:
     trades: FakeTradeRepository
     balances: FakeBalanceRepository
     imports: FakeImportRepository
+    deals: FakeDealRepository
 
     def import_report(self) -> ImportReport:
         return ImportReport(
@@ -188,6 +214,9 @@ class World:
 
     def ingest(self) -> IngestMt5History:
         return IngestMt5History(self.trades, self.balances, self.ids)
+
+    def ingest_deals(self) -> IngestDeals:
+        return IngestDeals(self.deals, self.trades, self.balances, self.ids)
 
     def list_trades(self) -> ListTrades:
         return ListTrades(self.trades)
@@ -214,6 +243,7 @@ def journal() -> World:
         trades=FakeTradeRepository(),
         balances=FakeBalanceRepository(),
         imports=FakeImportRepository(),
+        deals=FakeDealRepository(),
     )
 
 

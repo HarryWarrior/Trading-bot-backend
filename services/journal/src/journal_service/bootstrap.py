@@ -6,6 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from journal_service.adapters.outbound.mongo_repositories import (
     MongoBalanceRepository,
+    MongoDealRepository,
     MongoImportRepository,
     MongoTradeRepository,
 )
@@ -17,6 +18,7 @@ from journal_service.adapters.outbound.uuid_ids import UuidIdGenerator
 from journal_service.application.use_cases.get_dataset import GetDataset
 from journal_service.application.use_cases.get_trade import GetTrade
 from journal_service.application.use_cases.import_report import ImportReport
+from journal_service.application.use_cases.ingest_deals import IngestDeals
 from journal_service.application.use_cases.ingest_mt5_history import IngestMt5History
 from journal_service.application.use_cases.list_accounts import ListAccounts
 from journal_service.application.use_cases.list_imports import ListImports
@@ -32,6 +34,7 @@ class Container:
     repositories: tuple
     import_report: ImportReport
     ingest_mt5: IngestMt5History
+    ingest_deals: IngestDeals
     list_imports: ListImports
     list_trades: ListTrades
     get_trade: GetTrade
@@ -52,15 +55,17 @@ def build_container(settings: JournalSettings) -> Container:
     trades = MongoTradeRepository(db)
     balances = MongoBalanceRepository(db)
     imports = MongoImportRepository(db)
+    deals = MongoDealRepository(db)
     parser = DispatchingReportParser([Mt5ReportParser(), FlatCsvParser()])
     clock = SystemClock()
     ids = UuidIdGenerator()
     return Container(
         settings=settings,
         mongo_client=client,
-        repositories=(trades, balances, imports),
+        repositories=(trades, balances, imports, deals),
         import_report=ImportReport(parser, trades, balances, imports, clock, ids),
         ingest_mt5=IngestMt5History(trades, balances, ids),
+        ingest_deals=IngestDeals(deals, trades, balances, ids),
         list_imports=ListImports(imports),
         list_trades=ListTrades(trades),
         get_trade=GetTrade(trades),

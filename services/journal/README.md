@@ -34,6 +34,7 @@ All routes live under `/api/v1/journal` and require `Authorization: Bearer <acce
 | `GET` | `/accounts` | accounts with trade counts and first/last close |
 | `GET` | `/dataset?account_ref=` | `{trades, balance_events}`, unpaginated, for analytics |
 | `POST` | `/ingest/mt5` | requires header `X-Service-Key` (else 403 `FORBIDDEN`) plus the user token; `{account_ref, trades, balance_events}` -> `{created, updated, balance_events}` (idempotent; `balance_events` counts new events only) |
+| `POST` | `/ingest/deals` | requires header `X-Service-Key` only; the body names the owner: `{user_id, account_ref, deals: [...]}` (raw MT5 deals, at most 200) -> `{received, new, trades_upserted, balance_events, skipped}`. Idempotent per deal ticket: `new` counts unseen deals only; positions are paired by `position_id` and upserted as trades. Called by `mt5-bridge`, never by browsers |
 
 Errors: `DUPLICATE_IMPORT` 409 (`details.import_id`), `UNSUPPORTED_FILE` 400, `FILE_TOO_LARGE` 413,
 `UNREADABLE_REPORT` 400 (`details.reason`), `NOT_FOUND` 404, `UNAUTHENTICATED` 401, `FORBIDDEN` 403 (ingest without a valid service key).

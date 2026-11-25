@@ -29,7 +29,7 @@ Migration to services was spec 001 (done). New features go into services.
 ## 3. Tech stack
 
 Python 3.11+ · FastAPI 0.104 · Pydantic v2 · pydantic-settings · Motor/PyMongo (MongoDB) · pandas/NumPy
-(analytics) · pytest + pytest-asyncio · Ruff · Docker · Traefik gateway (planned) · MQL5 for the MT5 EA (planned).
+(analytics) · pytest + pytest-asyncio · Ruff · Docker · Traefik gateway (planned) · MQL5 EA: source written, unverified (spec 002).
 
 ## 4. Repository map
 
@@ -38,7 +38,7 @@ AGENTS.md  CLAUDE.md  GEMINI.md     # agent entry points (the last two point her
 .agents/rules/                      # how we build — read before coding
 .agents/templates/                  # spec, plan and ADR templates
 services/_template/                 # canonical hexagonal service: COPY THIS for new services
-services/<name>/                    # one folder per service (auth, journal, analytics, mt5; planned: mt5-bridge…)
+services/<name>/                    # one folder per service (auth, journal, analytics, mt5, mt5-bridge in progress)
 libs/shared/                        # trading_shared: envelope, errors, settings, logging, auth, mongo, request_id (cross-cutting only)
 tests/                              # repo hygiene, no-fake-data guard, cross-service acceptance suite
 docs/                               # architecture, services catalog, ADRs, integrations research
@@ -50,12 +50,13 @@ scripts/  .githooks/                # changelog script, pre-push hook
 
 ```bash
 python -m venv .venv && .venv\Scripts\activate          # Windows (source .venv/bin/activate elsewhere)
-pip install -e libs/shared -e "services/_template[dev]" -e "services/auth[dev]" -e "services/journal[dev]" -e "services/analytics[dev]" -e "services/mt5[dev]" ruff   # no root requirements.txt
+pip install -e libs/shared -e "services/_template[dev]" -e "services/auth[dev]" -e "services/journal[dev]" -e "services/analytics[dev]" -e "services/mt5[dev]" -e "services/mt5-bridge[dev]" ruff   # no root requirements.txt
 cp services/auth/.env.example services/auth/.env         # then set JWT_SECRET_KEY (git-ignored)
-cp services/journal/.env.example services/journal/.env   # and services/analytics/.env.example; all .env files (auth, journal, analytics, mt5) MUST share the same JWT_SECRET_KEY
+cp services/journal/.env.example services/journal/.env   # and services/analytics/.env.example; all .env files (auth, journal, analytics, mt5, mt5-bridge) MUST share the same JWT_SECRET_KEY
 cp services/mt5/.env.example services/mt5/.env           # INGEST_SERVICE_KEY MUST equal the one in services/journal/.env (>= 32 chars)
-powershell -File scripts/dev.ps1 [-Only auth]             # dev runner: auth 8001, journal 8002, analytics 8003, mt5 8004 (checks the shared JWT secret and INGEST_SERVICE_KEY)
-cd services/auth && uvicorn auth_service.main:app --reload --port 8001   # one service by hand (needs MongoDB); same pattern for journal 8002, analytics 8003 (JOURNAL_URL), mt5 8004
+cp services/mt5-bridge/.env.example services/mt5-bridge/.env   # same JWT_SECRET_KEY and INGEST_SERVICE_KEY as journal
+powershell -File scripts/dev.ps1 [-Only auth]             # dev runner: auth 8001, journal 8002, analytics 8003, mt5 8004, mt5-bridge 8005 (checks the shared JWT secret and INGEST_SERVICE_KEY)
+cd services/auth && uvicorn auth_service.main:app --reload --port 8001   # one service by hand (needs MongoDB); same pattern for journal 8002, analytics 8003 (JOURNAL_URL), mt5 8004, mt5-bridge 8005
 uvicorn template_service.main:app --reload --port 8010    # template service
 cd services/auth && python scripts/migrate_legacy_users.py --help   # copy users of the retired legacy DB into auth_db (needs the venv active)
 cd services/auth && python scripts/promote_admin.py <email>     # grant admin role (needs the venv active)

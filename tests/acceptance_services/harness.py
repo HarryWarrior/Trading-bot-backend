@@ -1,6 +1,6 @@
-"""Cross-service acceptance harness: the four REAL apps in one event loop, no ports, no MetaTrader.
+"""Cross-service acceptance harness: the five REAL apps in one event loop, no ports, no MetaTrader.
 
-auth, journal, analytics and mt5 are the production ``create_app`` factories. They are wired to each
+auth, journal, analytics, mt5 and mt5-bridge are the production ``create_app`` factories. They are wired to each
 other through ``httpx.ASGITransport`` (journal is the only one the others call), run on throwaway
 MongoDB databases, and mt5 gets a ``FakeTerminal`` (defined in the mt5 test helpers) instead of the
 MetaTrader5 package, so no real terminal is ever contacted. A test skips only when MongoDB is not
@@ -41,6 +41,11 @@ from auth_service.main import create_app as create_auth_app  # noqa: E402
 from auth_service.settings import AuthSettings  # noqa: E402
 from journal_service.main import create_app as create_journal_app  # noqa: E402
 from journal_service.settings import JournalSettings  # noqa: E402
+from mt5_bridge_service.adapters.outbound.journal_gateway import (  # noqa: E402
+    JournalHttpGateway as BridgeJournalGateway,
+)
+from mt5_bridge_service.main import create_app as create_bridge_app  # noqa: E402
+from mt5_bridge_service.settings import BridgeSettings  # noqa: E402
 from mt5_service.adapters.outbound.journal_gateway import JournalHttpGateway  # noqa: E402
 from mt5_service.main import create_app as create_mt5_app  # noqa: E402
 from mt5_service.settings import Mt5Settings  # noqa: E402
@@ -55,6 +60,7 @@ AUTH = "/api/v1/auth"
 JOURNAL = "/api/v1/journal"
 ANALYTICS = "/api/v1/analytics"
 MT5 = "/api/v1/mt5"
+BRIDGE = "/api/v1/mt5-bridge"
 
 
 class RecordingEmailSender:
@@ -93,6 +99,7 @@ class Stack:
     journal: httpx.AsyncClient
     analytics: httpx.AsyncClient
     mt5: httpx.AsyncClient
+    bridge: httpx.AsyncClient
     sender: RecordingEmailSender
     terminal: FakeTerminal
     mongo: MongoClient
@@ -160,7 +167,9 @@ def databases():
         client.close()
         pytest.skip("MongoDB is not reachable at localhost:27017")
     suffix = uuid.uuid4().hex
-    names = {kind: f"test_acceptance_{kind}_{suffix}" for kind in ("auth", "journal", "mt5")}
+    names = {
+        kind: f"test_acceptance_{kind}_{suffix}" for kind in ("auth", "journal", "mt5", "bridge")
+    }
     try:
         yield names, client
     finally:
@@ -213,9 +222,22 @@ async def stack(databases) -> AsyncIterator[Stack]:
         clock=FixedClock(),  # matches the FakeTerminal tick (+3h broker offset)
         journal=JournalHttpGateway("http://journal.test", SERVICE_KEY, transport=journal_transport),
     )
+    bridge_app = create_bridge_app(
+        BridgeSettings(
+            _env_file=None,
+            environment="test",
+            mongodb_url=MONGO_URL,
+            database_name=names["bridge"],
+            jwt_secret_key=SECRET,
+            ingest_service_key=SERVICE_KEY,
+        ),
+        journal=BridgeJournalGateway(
+            "http://journal.test", SERVICE_KEY, transport=journal_transport
+        ),
+    )
 
     async with AsyncExitStack() as exit_stack:
-        for app in (auth_app, journal_app, mt5_app):
+        for app in (auth_app, journal_app, mt5_app, bridge_app):
             await exit_stack.enter_async_context(app.router.lifespan_context(app))
 
         def client(app, name: str) -> httpx.AsyncClient:
@@ -228,6 +250,7 @@ async def stack(databases) -> AsyncIterator[Stack]:
             "journal": client(journal_app, "journal"),
             "analytics": client(analytics_app, "analytics"),
             "mt5": client(mt5_app, "mt5"),
+            "bridge": client(bridge_app, "bridge"),
         }
         for opened in clients.values():
             await exit_stack.enter_async_context(opened)

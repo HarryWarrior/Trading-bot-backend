@@ -20,6 +20,7 @@ from pymongo.errors import DuplicateKeyError
 
 from journal_service.application.ports.repositories import AccountSummary, TradeFilters
 from journal_service.domain.balance import BalanceEvent
+from journal_service.domain.deals import RawDeal
 from journal_service.domain.errors import DuplicateImport
 from journal_service.domain.report_import import ReportImport, SkippedRow
 from journal_service.domain.trade import Outcome, Side, Trade
@@ -388,4 +389,94 @@ class MongoImportRepository:
             skipped_rows=[
                 SkippedRow(row=s["row"], reason=s["reason"]) for s in doc["skipped_rows"]
             ],
+        )
+
+
+class MongoDealRepository:
+    """Raw MT5 deals, one document per ``(user_id, account_ref, ticket)``; ``_id`` is an ObjectId."""
+
+    def __init__(self, db: AsyncIOMotorDatabase) -> None:
+        self._col = db["deals"]
+
+    async def create_indexes(self) -> None:
+        await ensure_indexes(
+            self._col,
+            [
+                IndexModel(
+                    [("user_id", ASCENDING), ("account_ref", ASCENDING), ("ticket", ASCENDING)],
+                    unique=True,
+                    name="natural_ticket_unique",
+                ),
+                IndexModel(
+                    [
+                        ("user_id", ASCENDING),
+                        ("account_ref", ASCENDING),
+                        ("position_id", ASCENDING),
+                    ],
+                    name="user_account_position",
+                ),
+            ],
+        )
+
+    async def upsert_many(self, user_id: str, account_ref: str, deals: list[RawDeal]) -> int:
+        if not deals:
+            return 0
+        now = datetime.now(UTC)
+        ops = []
+        for deal in deals:
+            key = {"user_id": user_id, "account_ref": account_ref, "ticket": deal.ticket}
+            doc = {
+                "position_id": deal.position_id,
+                "time": deal.time.astimezone(UTC),
+                "type": deal.type,
+                "entry": deal.entry,
+                "symbol": deal.symbol,
+                "volume": _d128(deal.volume),
+                "price": _d128(deal.price),
+                "commission": _d128(deal.commission),
+                "swap": _d128(deal.swap),
+                "fee": _d128(deal.fee),
+                "profit": _d128(deal.profit),
+                "sl": _opt_d128(deal.sl),
+                "tp": _opt_d128(deal.tp),
+                "comment": deal.comment,
+                "updated_at": now,
+            }
+            ops.append(
+                UpdateOne(key, {"$set": doc, "$setOnInsert": {"created_at": now}}, upsert=True)
+            )
+        result = await self._col.bulk_write(ops, ordered=True)
+        return result.upserted_count
+
+    async def positions_for(
+        self, user_id: str, account_ref: str, position_ids: list[int]
+    ) -> list[RawDeal]:
+        if not position_ids:
+            return []
+        query = {
+            "user_id": user_id,
+            "account_ref": account_ref,
+            "position_id": {"$in": list(position_ids)},
+        }
+        cursor = self._col.find(query).sort([("time", ASCENDING), ("ticket", ASCENDING)])
+        return [self._to_deal(doc) async for doc in cursor]
+
+    @staticmethod
+    def _to_deal(doc: dict[str, Any]) -> RawDeal:
+        return RawDeal(
+            ticket=doc["ticket"],
+            position_id=doc["position_id"],
+            time=_utc(doc["time"]),
+            type=doc["type"],
+            entry=doc["entry"],
+            symbol=doc["symbol"],
+            volume=_dec(doc["volume"]),
+            price=_dec(doc["price"]),
+            commission=_dec(doc["commission"]),
+            swap=_dec(doc["swap"]),
+            profit=_dec(doc["profit"]),
+            sl=_opt_dec(doc.get("sl")),
+            tp=_opt_dec(doc.get("tp")),
+            comment=doc.get("comment"),
+            fee=_dec(doc["fee"]),
         )

@@ -15,7 +15,14 @@
 - journal: MT5 correction/charge/bonus/commission-type deals become signed `adjustment` balance events; unknown deal types are reported in `skipped_rows`; the account-summary block after Deals is ignored; skipped rows report absolute file/sheet row numbers; flat-file uploads share the stable account ref `upload` (overlapping re-imports never duplicate).
 - root `requirements.txt` (legacy app): `python-multipart` 0.0.6 → 0.0.20.
 
+### Changed (spec 002 final review)
+- mt5-bridge: `/ingest/deals` answers also carry `balance_events` and `skipped` positions (logged at WARNING); a journal-rejected batch logs its ticket range and count.
+
 ### Added
+- `services/mt5-bridge` (port 8005, `bridge_db`): ingest tokens (plaintext shown once, hashed, revocable), broker accounts with heartbeat status (`connected` within 5 minutes), `POST /ingest/deals` and `/ingest/heartbeat` for the MT5 EA, deals forwarded to journal. Lists are paginated `{items, pagination}`. The EA source (`services/mt5-bridge/ea/TradingJournalBridge.mq5`, native `WebRequest`, no DLL) is written *(awaiting compile and real-account verification, Task 8)*.
+- mt5-bridge EA: heartbeat before backfill, `HistorySelect` backfill and `OnTradeTransaction` deals in batches of at most 200 through a file queue (`MQL5\Files\TradingJournalBridge\`), retry with exponential backoff capped at 5 minutes on 503/network errors, batch dropped on other 4xx, stop on 401; never logs the token. Queue writes are checked (no high-water-mark advance on failure, no partial queue replacement) and torn queue lines are skipped. Contract test `tests/unit/test_ea_contract.py` and sample payloads in `ea/sample_payloads/`. `*.ex5` is git-ignored.
+- journal: `POST /api/v1/journal/ingest/deals` (service key): raw MT5 deals paired by `position_id` into trades, idempotent per deal.
+- Cross-service acceptance test `tests/acceptance_services/test_ea_bridge_flow.py` (token, push, dedupe, revoke, heartbeat, tenant isolation).
 - `AGENTS.md`, `.agents/rules/` and `.agents/templates/`: single source of rules for AI agents (replaces `.gemini/rules`).
 - `libs/shared` (`trading_shared`): response envelope, pagination (`page_params`), error envelope, settings, logging.
 - `services/_template`: canonical hexagonal microservice with architecture test.

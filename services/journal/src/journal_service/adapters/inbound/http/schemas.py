@@ -6,14 +6,17 @@ from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from journal_service.application.ports.repositories import AccountSummary
 from journal_service.domain.balance import BalanceEvent, BalanceKind
+from journal_service.domain.deals import DealType
 from journal_service.domain.report_import import ReportImport
 from journal_service.domain.trade import Trade
 
 _CENT = Decimal("0.01")
+MAX_DEALS_PER_BATCH = 1000
+_TRADE_DEAL_TYPES = (DealType.BUY, DealType.SELL)
 
 
 def money(value: Decimal) -> float:
@@ -196,3 +199,48 @@ class IngestOut(BaseModel):
     created: int
     updated: int
     balance_events: int
+
+
+class IngestDealIn(BaseModel):
+    """One raw MT5 deal as sent by the EA bridge; ``time`` is UTC (tz-aware ISO 8601)."""
+
+    ticket: int = Field(ge=0)
+    position_id: int = Field(ge=0)
+    time: AwareDatetime
+    type: int = Field(ge=0)
+    entry: int = Field(ge=0)
+    symbol: str = ""
+    volume: Decimal = Decimal(0)
+    price: Decimal = Decimal(0)
+    commission: Decimal = Decimal(0)
+    swap: Decimal = Decimal(0)
+    fee: Decimal = Decimal(0)
+    profit: Decimal = Decimal(0)
+    sl: Decimal | None = None
+    tp: Decimal | None = None
+    comment: str | None = None
+
+    @model_validator(mode="after")
+    def _trade_deals_need_volume(self) -> IngestDealIn:
+        if self.type in _TRADE_DEAL_TYPES and self.volume <= 0:
+            raise ValueError("BUY/SELL deals need a volume greater than 0")
+        return self
+
+
+class IngestDealsRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+    account_ref: str = Field(min_length=1)
+    deals: list[IngestDealIn] = Field(default_factory=list, max_length=MAX_DEALS_PER_BATCH)
+
+
+class SkippedPositionOut(BaseModel):
+    position_id: str
+    reason: str
+
+
+class IngestDealsOut(BaseModel):
+    received: int
+    new: int
+    trades_upserted: int
+    balance_events: int
+    skipped: list[SkippedPositionOut]

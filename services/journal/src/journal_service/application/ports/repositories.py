@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Protocol
 
 from journal_service.domain.balance import BalanceEvent
+from journal_service.domain.deals import RawDeal
 from journal_service.domain.report_import import ReportImport
 from journal_service.domain.trade import Outcome, Trade
 
@@ -58,6 +59,18 @@ class BalanceRepository(Protocol):
         ...
 
     async def all_for(self, user_id: str, account_ref: str | None) -> list[BalanceEvent]: ...
+
+
+class DealRepository(Protocol):
+    async def upsert_many(self, user_id: str, account_ref: str, deals: list[RawDeal]) -> int:
+        """Upsert by ``(user_id, account_ref, ticket)``; return how many deals are new."""
+        ...
+
+    async def positions_for(
+        self, user_id: str, account_ref: str, position_ids: list[int]
+    ) -> list[RawDeal]:
+        """Every stored deal of the given positions, for this user and account only."""
+        ...
 
 
 class ImportRepository(Protocol):

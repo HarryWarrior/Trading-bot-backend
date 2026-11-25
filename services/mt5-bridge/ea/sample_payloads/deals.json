@@ -1,0 +1,57 @@
+{
+  "account_login": 5039281,
+  "server": "MetaQuotes-Demo",
+  "deals": [
+    {
+      "ticket": 412305871,
+      "position_id": 0,
+      "time": "2026-11-20T08:00:05Z",
+      "type": 2,
+      "entry": 0,
+      "symbol": "",
+      "volume": "0",
+      "price": "0",
+      "commission": "0",
+      "swap": "0",
+      "fee": "0",
+      "profit": "5000",
+      "sl": null,
+      "tp": null,
+      "comment": "Deposit"
+    },
+    {
+      "ticket": 412318840,
+      "position_id": 698214437,
+      "time": "2026-11-20T09:14:32Z",
+      "type": 0,
+      "entry": 0,
+      "symbol": "EURUSD",
+      "volume": "0.5",
+      "price": "1.08452",
+      "commission": "-1.75",
+      "swap": "0",
+      "fee": "0",
+      "profit": "0",
+      "sl": "1.08152",
+      "tp": "1.09052",
+      "comment": "breakout \"London\""
+    },
+    {
+      "ticket": 412337912,
+      "position_id": 698214437,
+      "time": "2026-11-20T14:02:11Z",
+      "type": 1,
+      "entry": 1,
+      "symbol": "EURUSD",
+      "volume": "0.5",
+      "price": "1.08731",
+      "commission": "-1.75",
+      "swap": "-0.42",
+      "fee": "0",
+      "profit": "139.5",
+      "sl": "1.08452",
+      "tp": "1.09052",
+      "comment": "[tp 1.08731]"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-# Dev runner: starts the services (auth 8001, journal 8002, analytics 8003, mt5 8004).
+# Dev runner: starts the services (auth 8001, journal 8002, analytics 8003, mt5 8004, mt5-bridge 8005).
 # Usage: powershell -File scripts/dev.ps1 [-Only auth]
 param([string[]]$Only = @())
 
@@ -15,7 +15,8 @@ $services = @(
     @{ Name = "auth"; Dir = "auth"; Port = 8001; Module = "auth_service.main:app" },
     @{ Name = "journal"; Dir = "journal"; Port = 8002; Module = "journal_service.main:app" },
     @{ Name = "analytics"; Dir = "analytics"; Port = 8003; Module = "analytics_service.main:app" },
-    @{ Name = "mt5"; Dir = "mt5"; Port = 8004; Module = "mt5_service.main:app" }
+    @{ Name = "mt5"; Dir = "mt5"; Port = 8004; Module = "mt5_service.main:app" },
+    @{ Name = "mt5-bridge"; Dir = "mt5-bridge"; Port = 8005; Module = "mt5_bridge_service.main:app" }
 )
 if ($Only.Count -gt 0) { $services = @($services | Where-Object { $Only -contains $_.Name }) }
 if ($services.Count -eq 0) { Write-Error "No matching services."; exit 1 }
@@ -51,9 +52,9 @@ if ($differing.Count -gt 0) {
     exit 1
 }
 
-# journal and mt5 must share INGEST_SERVICE_KEY (compared case-sensitively, never printed).
-$ingest = @($services | Where-Object { @("journal", "mt5") -contains $_.Name })
-if ($ingest.Count -eq 2) {
+# journal, mt5 and mt5-bridge must share INGEST_SERVICE_KEY (compared case-sensitively, never printed).
+$ingest = @($services | Where-Object { @("journal", "mt5", "mt5-bridge") -contains $_.Name })
+if ($ingest.Count -ge 2 -and @($ingest | Where-Object { $_.Name -eq "journal" }).Count -eq 1) {
     $keys = @{}
     foreach ($svc in $ingest) {
         $keys[$svc.Name] = Get-EnvValue (Join-Path $root ("services\" + $svc.Dir + "\.env")) "INGEST_SERVICE_KEY"
@@ -63,8 +64,9 @@ if ($ingest.Count -eq 2) {
         Write-Error ("missing INGEST_SERVICE_KEY in " + ($noKey -join ", "))
         exit 1
     }
-    if ($keys["mt5"] -cne $keys["journal"]) {
-        Write-Error "INGEST_SERVICE_KEY of mt5 differs from journal. Both services must share the same value."
+    $differing = @($ingest | Where-Object { $keys[$_.Name] -cne $keys["journal"] } | ForEach-Object { $_.Name })
+    if ($differing.Count -gt 0) {
+        Write-Error ("INGEST_SERVICE_KEY of " + ($differing -join ", ") + " differs from journal. These services must share the same value.")
         exit 1
     }
 }

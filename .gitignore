@@ -15,3 +15,6 @@ build/
 # Real data never goes in git
 data/raw/
 data/private/
+
+# Compiled MQL5 (build artifacts; the owner compiles the EA)
+*.ex5
