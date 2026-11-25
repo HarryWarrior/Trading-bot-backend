@@ -6,8 +6,9 @@ because the bridge already sends UTC):
 - trade deals (BUY/SELL) are grouped by ``position_id``; side = side of the IN deal; volume = sum
   of IN volumes; a position is closed only when the exit volume equals the entry volume (Decimal
   equality). Open positions are counted, never returned.
-- positions containing an INOUT (reversal) deal, an unknown entry value, entry deals of both sides,
-  no entry deal or more exit than entry volume are reported in ``skipped`` with a reason.
+- positions containing an INOUT (reversal) deal, an unknown entry value, a deal with volume <= 0,
+  entry deals of both sides, no entry deal or more exit than entry volume are reported in
+  ``skipped`` with a reason (never raised, so one bad stored deal cannot block later batches).
 - BUY_CANCELED / SELL_CANCELED deals are ignored. BALANCE -> deposit/withdrawal, CREDIT -> credit,
   any other type (known or not) -> signed ``adjustment``; zero amounts are dropped.
 - ``fee`` is folded into ``commission`` because the journal has no fee field.
@@ -100,6 +101,8 @@ def _pair_position(position_id: int, deals: list[RawDeal]) -> PairedTrade | str 
     for d in deals:
         if d.entry not in _KNOWN_ENTRIES:
             return f"unknown deal entry {int(d.entry)}"
+    if any(d.volume <= 0 for d in deals):
+        return "non-positive deal volume"
     if any(d.entry == DealEntry.INOUT for d in deals):
         return "reversal (INOUT) deals are not supported yet"
     entries = [d for d in deals if d.entry == DealEntry.IN]

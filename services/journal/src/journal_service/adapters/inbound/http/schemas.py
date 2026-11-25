@@ -6,15 +6,17 @@ from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from journal_service.application.ports.repositories import AccountSummary
 from journal_service.domain.balance import BalanceEvent, BalanceKind
+from journal_service.domain.deals import DealType
 from journal_service.domain.report_import import ReportImport
 from journal_service.domain.trade import Trade
 
 _CENT = Decimal("0.01")
 MAX_DEALS_PER_BATCH = 1000
+_TRADE_DEAL_TYPES = (DealType.BUY, DealType.SELL)
 
 
 def money(value: Decimal) -> float:
@@ -217,6 +219,12 @@ class IngestDealIn(BaseModel):
     sl: Decimal | None = None
     tp: Decimal | None = None
     comment: str | None = None
+
+    @model_validator(mode="after")
+    def _trade_deals_need_volume(self) -> IngestDealIn:
+        if self.type in _TRADE_DEAL_TYPES and self.volume <= 0:
+            raise ValueError("BUY/SELL deals need a volume greater than 0")
+        return self
 
 
 class IngestDealsRequest(BaseModel):

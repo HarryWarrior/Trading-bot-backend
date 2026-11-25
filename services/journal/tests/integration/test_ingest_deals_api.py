@@ -153,3 +153,19 @@ def test_naive_times_are_rejected(client):
 def test_user_id_is_required(client):
     response = post(client, {"account_ref": ACCOUNT, "deals": [ENTRY]})
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize("volume", ["0", "-1"])
+def test_trade_deal_with_non_positive_volume_is_422(client, volume):
+    response = post(client, body([raw(1, 7, "2026-03-02T08:00:00Z", 0, 0, volume=volume)]))
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_balance_deal_with_zero_volume_is_accepted(client):
+    assert post(client, body([DEPOSIT])).status_code == 200
+
+
+def test_duplicate_ticket_within_one_batch_is_stored_once(client):
+    data = post(client, body([ENTRY, ENTRY, EXIT])).json()["data"]
+    assert (data["received"], data["new"], data["trades_upserted"]) == (3, 2, 1)

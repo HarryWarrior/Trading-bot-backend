@@ -374,8 +374,16 @@ async def test_deals_upsert_is_idempotent_and_round_trips(db):
 
     got = await deals.positions_for("u1", "acc", [7])
     assert sorted(got, key=lambda d: d.ticket) == batch[:2]
+    assert got[0].fee == Decimal("-0.05")
     assert await deals.upsert_many("u1", "acc", []) == 0
     assert await deals.positions_for("u1", "acc", []) == []
+
+
+async def test_deals_duplicate_ticket_within_one_batch_counts_once(db):
+    deals = MongoDealRepository(db)
+    await deals.create_indexes()
+    assert await deals.upsert_many("u1", "acc", [_raw(1, 7), _raw(1, 7)]) == 1
+    assert await db["deals"].count_documents({}) == 1
 
 
 async def test_deals_are_isolated_by_user_and_account(db):

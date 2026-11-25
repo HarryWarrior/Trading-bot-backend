@@ -103,3 +103,22 @@ async def test_inout_position_is_reported_as_skipped(journal):
 async def test_empty_batch_is_a_no_op(journal):
     result = await journal.ingest_deals().execute("u1", ACCOUNT, [])
     assert (result.received, result.new, result.trades_upserted) == (0, 0, 0)
+
+
+async def test_poisoned_stored_deal_does_not_break_later_batches(journal):
+    poisoned = deal(10, 9, 8, DealType.BUY, DealEntry.IN, volume="0")
+    journal.deals.rows[("u1", ACCOUNT, poisoned.ticket)] = poisoned
+    use_case = journal.ingest_deals()
+
+    first = await use_case.execute("u1", ACCOUNT, [deal(11, 9, 9, DealType.SELL, DealEntry.OUT)])
+    second = await use_case.execute("u1", ACCOUNT, [ENTRY, EXIT])
+
+    assert first.skipped == [("9", "non-positive deal volume")]
+    assert second.trades_upserted == 1
+    assert second.skipped == []
+
+
+async def test_duplicate_ticket_within_one_batch_is_stored_once(journal):
+    result = await journal.ingest_deals().execute("u1", ACCOUNT, [ENTRY, ENTRY, EXIT])
+    assert (result.received, result.new, result.trades_upserted) == (3, 2, 1)
+    assert len(journal.deals.rows) == 2

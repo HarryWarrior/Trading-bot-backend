@@ -278,3 +278,13 @@ def test_raw_deal_requires_aware_time():
             volume=D(1), price=D(1), commission=D(0), swap=D(0), profit=D(0),
             sl=None, tp=None, comment=None,
         )  # fmt: skip
+
+
+def test_zero_volume_trade_deals_are_skipped_not_raised():
+    deals = [
+        deal(1, 6, "2026-03-02T10:00:00", DealType.BUY, DealEntry.IN, volume="0", price="1.1"),
+        deal(2, 6, "2026-03-02T11:00:00", DealType.SELL, DealEntry.OUT, volume="0", price="1.2"),
+    ]  # fmt: skip
+    result = pair_deals(deals + closed_position(7))
+    assert [t.position_id for t in result.trades] == ["7"]
+    assert result.skipped == [("6", "non-positive deal volume")]
