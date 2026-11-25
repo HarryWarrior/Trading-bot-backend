@@ -42,5 +42,5 @@ New service boundary, new external dependency of significance, new communication
 - No absolute local paths (`file:///C:/...`) — use relative links.
 
 ```markdown
-| mt5-bridge | Receives executions from the MT5 EA | planned (spec 002) | mt5_bridge_db |
+| mt5-bridge | Receives executions from the MT5 EA | planned (spec 002) | bridge_db |
 ```

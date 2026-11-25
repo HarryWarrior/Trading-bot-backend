@@ -16,6 +16,9 @@
 - root `requirements.txt` (legacy app): `python-multipart` 0.0.6 → 0.0.20.
 
 ### Added
+- `services/mt5-bridge` (port 8005, `bridge_db`): ingest tokens (plaintext shown once, hashed, revocable), broker accounts with heartbeat status (`connected` within 5 minutes), `POST /ingest/deals` and `/ingest/heartbeat` for the MT5 EA, deals forwarded to journal. Lists are paginated `{items, pagination}`. The EA is *(planned, spec 002 Task 7)*.
+- journal: `POST /api/v1/journal/ingest/deals` (service key): raw MT5 deals paired by `position_id` into trades, idempotent per deal.
+- Cross-service acceptance test `tests/acceptance_services/test_ea_bridge_flow.py` (token, push, dedupe, revoke, heartbeat, tenant isolation).
 - `AGENTS.md`, `.agents/rules/` and `.agents/templates/`: single source of rules for AI agents (replaces `.gemini/rules`).
 - `libs/shared` (`trading_shared`): response envelope, pagination (`page_params`), error envelope, settings, logging.
 - `services/_template`: canonical hexagonal microservice with architecture test.

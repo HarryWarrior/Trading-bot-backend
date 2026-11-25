@@ -6,7 +6,7 @@
 flowchart LR
   trader([Trader]) --> web[Web app<br/>trading-bot-frontend]
   ai([AI agent<br/>MCP / API]) -. planned 004 .-> gw
-  ea[MT5 terminal + EA bridge] -. planned 002 .-> gw
+  ea[MT5 terminal + EA bridge<br/>EA built: planned 002 Task 7] -->|ingest token| bridge
   web --> gw[API gateway<br/>Traefik — planned 001]
   gw --> svc[Backend services]
   svc --> mongo[(MongoDB)]
@@ -16,6 +16,23 @@ flowchart LR
 The platform is a multi-user SaaS of trading tools. Users connect their trading accounts once; their
 executions flow in automatically, get analyzed, journaled (also by AI), and can drive backtested
 strategies promoted to paper and live trading.
+
+### EA bridge flow (spec 002)
+
+```
+EA (MT5 terminal) --Bearer ingest token--> mt5-bridge --X-Service-Key--> journal
+  POST /ingest/heartbeat                    resolves owner from the token   POST /ingest/deals
+  POST /ingest/deals (<= 200 deals)         upserts account, forwards deals stores raw deals, pairs by position_id,
+                                                                            upserts trades (idempotent)
+```
+
+The user creates a token in the web app (`POST /api/v1/mt5-bridge/tokens`, plaintext shown once) and
+pastes it into the EA. Retry rule for the EA on `/ingest/deals`: 200 accepted; 401 token unknown or
+revoked (stop, ask for a new token); any other 4xx (422 `VALIDATION_ERROR`, `INVALID_DEAL_BATCH`,
+`JOURNAL_REJECTED`) the batch can never be accepted, drop it; 503 `JOURNAL_UNAVAILABLE` keep the batch
+and retry. The EA sends a heartbeat in `OnInit` before any backfill, because `last_deal_at` only
+updates accounts that already exist. The EA itself is *(planned, spec 002 Task 7)*. Acceptance:
+`tests/acceptance_services/test_ea_bridge_flow.py`.
 
 ## 2. Target containers (services)
 

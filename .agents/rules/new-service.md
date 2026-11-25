@@ -41,7 +41,7 @@ uvicorn mt5_bridge_service.main:app --port 8011
 | Folder | kebab-case | `services/mt5-bridge` |
 | Python package | snake_case + `_service` | `mt5_bridge_service` |
 | Route prefix | `/api/v1/<folder-name>` | `/api/v1/mt5-bridge` |
-| Database | `<package without _service>_db` | `mt5_bridge_db` |
+| Database | `<package without _service>_db` | `bridge_db` (short name is allowed; keep it equal to `MONGO_DB` in `.env.example`) |
 | Use case | Verb + noun class | `IngestDeals`, `RevokeIngestToken` |
 | Port | Noun + role | `DealRepository`, `BrokerGateway` |
 | Adapter | Technology + port | `MongoDealRepository`, `MetaApiBrokerGateway` |
