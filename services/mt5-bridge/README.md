@@ -23,6 +23,12 @@ Every ingest request updates the token's `last_used_at`; the owner always comes 
 Deals go to journal's `POST /api/v1/journal/ingest/deals` with `X-Service-Key`, and
 `last_deal_at` of an existing account moves forward once journal accepts them.
 
+The 200 answer is `{received, new, trades_upserted, balance_events, skipped: [{position_id, reason}]}`.
+Positions journal cannot pair (reversals, exit volume above entry, mixed sides) are listed in `skipped`
+and logged at WARNING (ids and reasons only). When journal refuses a batch (422 `JOURNAL_REJECTED`) the
+bridge logs the ticket range and count at WARNING (never the payload), so a stuck batch can be skipped
+by raising the EA high-water mark above its last ticket.
+
 EA retry contract for `/ingest/deals`:
 
 | Answer | Meaning for the EA |

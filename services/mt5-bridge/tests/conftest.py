@@ -93,6 +93,7 @@ class FakeJournalGateway:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, list[RawDeal]]] = []
         self.error: Exception | None = None
+        self.result: IngestDealsResult | None = None
 
     async def ingest_deals(
         self, user_id: str, account_ref: str, deals: list[RawDeal]
@@ -100,6 +101,8 @@ class FakeJournalGateway:
         if self.error is not None:
             raise self.error
         self.calls.append((user_id, account_ref, list(deals)))
+        if self.result is not None:
+            return self.result
         return IngestDealsResult(received=len(deals), new=len(deals), trades_upserted=1)
 
 

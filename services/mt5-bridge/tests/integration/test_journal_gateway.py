@@ -197,3 +197,40 @@ async def test_timeouts_and_connection_errors_are_unavailable():
 async def test_unusable_answer_is_unavailable():
     with pytest.raises(JournalUnavailable):
         await gateway(capture(200, {"success": True})).ingest_deals("alice", REF, [ENTRY])
+
+
+async def test_skipped_positions_and_balance_events_are_returned_and_warned_without_secrets(caplog):
+    body = {
+        "success": True,
+        "data": {
+            "received": 2,
+            "new": 2,
+            "trades_upserted": 0,
+            "balance_events": 3,
+            "skipped": [{"position_id": "7", "reason": "reversal"}],
+        },
+    }
+    with caplog.at_level(logging.WARNING):
+        result = await gateway(capture(200, body)).ingest_deals("alice", REF, [ENTRY])
+    assert result.balance_events == 3
+    assert [(s.position_id, s.reason) for s in result.skipped] == [("7", "reversal")]
+    assert "skipped 1 positions" in caplog.text
+    assert "('7', 'reversal')" in caplog.text
+    assert SERVICE_KEY not in caplog.text
+
+
+async def test_no_warning_when_nothing_was_skipped(caplog):
+    with caplog.at_level(logging.WARNING):
+        await gateway(capture(200, OK_BODY)).ingest_deals("alice", REF, [ENTRY])
+    assert "skipped" not in caplog.text
+
+
+async def test_rejected_batch_logs_ticket_range_only(caplog):
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(JournalRejected):
+            await gateway(
+                capture(422, {"error": {"details": [{"secret": "payload-detail"}]}})
+            ).ingest_deals("alice", REF, [ENTRY, EXIT])
+    assert "tickets 1..2" in caplog.text
+    assert "2 deals" in caplog.text
+    assert "payload-detail" not in caplog.text

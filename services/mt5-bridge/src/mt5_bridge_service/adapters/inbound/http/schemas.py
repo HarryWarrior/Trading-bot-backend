@@ -77,14 +77,30 @@ class IngestDealsIn(BaseModel):
     deals: list[DealIn] = Field(default_factory=list, max_length=MAX_DEALS_PER_REQUEST)
 
 
+class SkippedPositionOut(BaseModel):
+    position_id: str
+    reason: str
+
+
 class IngestDealsOut(BaseModel):
     received: int
     new: int
     trades_upserted: int
+    balance_events: int = 0
+    skipped: list[SkippedPositionOut] = Field(default_factory=list)
 
     @classmethod
     def from_domain(cls, result: IngestDealsResult) -> IngestDealsOut:
-        return cls(received=result.received, new=result.new, trades_upserted=result.trades_upserted)
+        return cls(
+            received=result.received,
+            new=result.new,
+            trades_upserted=result.trades_upserted,
+            balance_events=result.balance_events,
+            skipped=[
+                SkippedPositionOut(position_id=s.position_id, reason=s.reason)
+                for s in result.skipped
+            ],
+        )
 
 
 class HeartbeatIn(BaseModel):

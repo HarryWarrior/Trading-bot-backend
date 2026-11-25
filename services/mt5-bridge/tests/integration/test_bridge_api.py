@@ -9,6 +9,7 @@ import jwt
 import pytest
 from fastapi.testclient import TestClient
 
+from mt5_bridge_service.application.ports.journal import IngestDealsResult, SkippedPosition
 from mt5_bridge_service.domain.errors import JournalRejected, JournalUnavailable
 from mt5_bridge_service.main import create_app
 from mt5_bridge_service.settings import BridgeSettings
@@ -214,13 +215,36 @@ def test_deals_forwarded_with_token_owner_user_id(client, journal):
     body["user_id"] = "bob"  # ignored: the owner comes from the token only
     response = client.post(f"{BASE}/ingest/deals", json=body, headers=bearer(plaintext))
     assert response.status_code == 200, response.text
-    assert response.json()["data"] == {"received": 2, "new": 2, "trades_upserted": 1}
+    assert response.json()["data"] == {
+        "received": 2,
+        "new": 2,
+        "trades_upserted": 1,
+        "balance_events": 0,
+        "skipped": [],
+    }
 
     [(user_id, account_ref, deals)] = journal.calls
     assert (user_id, account_ref) == ("alice", "123456@Demo-Server")
     assert deals[0].time == datetime(2026, 3, 2, 8, 0, tzinfo=UTC)
     assert deals[0].time.utcoffset() == timedelta(0)
     assert str(deals[1].sl) == "1.09"
+
+
+def test_skipped_positions_and_balance_events_reach_the_ea_response(client, journal):
+    journal.result = IngestDealsResult(
+        received=1,
+        new=1,
+        trades_upserted=0,
+        balance_events=2,
+        skipped=(SkippedPosition("7", "reversal"),),
+    )
+    plaintext = issue(client)["plaintext_token"]
+    response = client.post(
+        f"{BASE}/ingest/deals", json=deals_body([raw(1)]), headers=bearer(plaintext)
+    )
+    data = response.json()["data"]
+    assert data["balance_events"] == 2
+    assert data["skipped"] == [{"position_id": "7", "reason": "reversal"}]
 
 
 def test_deals_update_last_deal_at_of_the_account(client, clock):

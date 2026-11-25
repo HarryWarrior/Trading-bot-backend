@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 
-from mt5_bridge_service.application.ports.journal import IngestDealsResult
+from mt5_bridge_service.application.ports.journal import IngestDealsResult, SkippedPosition
 from mt5_bridge_service.domain.deal import RawDeal
 from mt5_bridge_service.domain.errors import JournalRejected, JournalUnavailable
 
@@ -93,18 +93,38 @@ class JournalHttpGateway:
             logger.error("Journal rejected service key: check INGEST_SERVICE_KEY on both services")
             raise JournalUnavailable("Journal rejected the service credentials")
         if status in REJECTION_STATUSES:
-            logger.warning("Journal rejected a batch of %d deals: HTTP %s", len(deals), status)
+            tickets = [d.ticket for d in deals]
+            logger.warning(
+                "Journal rejected a batch of %d deals (tickets %d..%d): HTTP %s. "
+                "To skip it, raise the EA high-water mark above the last ticket.",
+                len(deals),
+                min(tickets, default=0),
+                max(tickets, default=0),
+                status,
+            )
             raise JournalRejected(details=_error_details(response))
         if not response.is_success:
             logger.warning("Journal answered HTTP %s", status)
             raise JournalUnavailable(f"Journal answered HTTP {status}")
         try:
             data = response.json()["data"]
-            return IngestDealsResult(
+            result = IngestDealsResult(
                 received=int(data["received"]),
                 new=int(data["new"]),
                 trades_upserted=int(data["trades_upserted"]),
+                balance_events=int(data.get("balance_events", 0)),
+                skipped=tuple(
+                    SkippedPosition(position_id=str(s["position_id"]), reason=str(s["reason"]))
+                    for s in data.get("skipped", [])
+                ),
             )
         except (KeyError, TypeError, ValueError) as exc:
             logger.warning("Journal sent an unusable ingest answer")
             raise JournalUnavailable("Journal sent an unusable answer") from exc
+        if result.skipped:
+            logger.warning(
+                "Journal skipped %d positions: %s",
+                len(result.skipped),
+                [(s.position_id, s.reason) for s in result.skipped],
+            )
+        return result
