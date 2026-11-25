@@ -267,6 +267,9 @@ int Post(const string path, const string body, string &reply)
       else
          Print("TradingJournalBridge: request to ", path, " failed (network error ", error, "); will retry.");
      }
+   else if(status >= 300 && status < 400)
+      Print("TradingJournalBridge: HTTP ", status, " redirect from ", path,
+            ". Set ApiUrl to the final https origin (WebRequest does not follow it); will retry.");
    return status;
   }
 
@@ -288,7 +291,7 @@ void StopUnauthorized()
    if(g_stopped)
       return;
    g_stopped = true;
-   string message = "TradingJournalBridge: the ingest token was rejected (unknown or revoked). "
+   string message = "TradingJournalBridge: the ingest token was rejected (unknown or revoked). " +
                     "Sending stopped. Create a new token in the web app and set it in the EA inputs.";
    Alert(message);
    Comment(message);
@@ -312,14 +315,52 @@ void ScheduleRetry(const int status)
 //| <terminal data folder>\MQL5\Files\TradingJournalBridge\          |
 //|   queue_<login>_<server>.jsonl                                   |
 //+------------------------------------------------------------------+
-// Defensive: tolerates a BOM, \r\r\n line ends and a torn last line after a crash.
+// True when the line is exactly one JSON object: it starts with '{', and the brace depth
+// (braces inside JSON strings ignored) stays > 0 until the last character, where it is 0.
+// Rejects a torn line joined to the next one, e.g. {"ticket":1,"sym{"ticket":2,...}.
+bool IsSingleJsonObject(const string line)
+  {
+   int len = StringLen(line);
+   if(len < 2 || StringGetCharacter(line, 0) != '{')
+      return false;
+   int depth = 0;
+   bool in_string = false;
+   bool escaped = false;
+   for(int i = 0; i < len; i++)
+     {
+      ushort c = StringGetCharacter(line, i);
+      if(in_string)
+        {
+         if(escaped)
+            escaped = false;
+         else if(c == 92)
+            escaped = true;
+         else if(c == 34)
+            in_string = false;
+         continue;
+        }
+      if(c == 34)
+         in_string = true;
+      else if(c == '{')
+         depth++;
+      else if(c == '}')
+        {
+         depth--;
+         if(depth < 0 || (depth == 0 && i != len - 1))
+            return false;
+        }
+     }
+   return depth == 0 && !in_string;
+  }
+
+// Defensive: tolerates a BOM, \r\r\n line ends and empty lines; drops torn or joined lines.
 string CleanLine(const string raw)
   {
    string line = TrimText(raw);
    int len = StringLen(line);
    if(len == 0)
       return "";
-   if(StringGetCharacter(line, 0) != '{' || StringGetCharacter(line, len - 1) != '}')
+   if(!IsSingleJsonObject(line))
      {
       Print("TradingJournalBridge: skipping a corrupt queue line (", len, " chars).");
       return "";
@@ -336,9 +377,23 @@ bool AppendToQueue(const string &lines[], const int count)
       return false;
      }
    FileSeek(handle, 0, SEEK_END);
-   for(int i = 0; i < count; i++)
-      FileWriteString(handle, lines[i] + "\r\n");
+   // Start on a fresh line: if a crash tore the last line (no line end), the new deals must
+   // not be joined onto it. Written unconditionally instead of peeking at the last character
+   // (no text/binary mode mixing); the empty line is skipped on read and removed on rewrite.
+   bool ok = FileWriteString(handle, "\r\n") > 0;
+   for(int i = 0; i < count && ok; i++)
+      if(FileWriteString(handle, lines[i] + "\r\n") == 0)
+         ok = false;
+   int write_error = ok ? 0 : GetLastError();   // read before FileFlush/FileClose can reset it
+   FileFlush(handle);
    FileClose(handle);
+   if(!ok)
+     {
+      // Lines written before the failure stay (resending is harmless); the caller does not
+      // advance the high-water mark, so the next scan queues every one of these deals again.
+      Print("TradingJournalBridge: cannot write to the queue file ", g_queue_file, " (error ", write_error, ").");
+      return false;
+     }
    return true;
   }
 
@@ -382,9 +437,21 @@ void RewriteQueue(const string &lines[], const int from, const int total)
       Print("TradingJournalBridge: cannot rewrite the queue (error ", GetLastError(), "); sent deals may be resent.");
       return;
      }
-   for(int i = from; i < total; i++)
-      FileWriteString(handle, lines[i] + "\r\n");
+   bool ok = true;
+   for(int i = from; i < total && ok; i++)
+      if(FileWriteString(handle, lines[i] + "\r\n") == 0)
+         ok = false;
+   int write_error = ok ? 0 : GetLastError();   // read before FileClose can reset it
+   if(ok)
+      FileFlush(handle);
    FileClose(handle);
+   if(!ok)
+     {
+      // Never replace the real queue with a partial copy: keep it (sent deals are resent later).
+      Print("TradingJournalBridge: cannot write the new queue (error ", write_error, "); the old queue is kept.");
+      FileDelete(temp);
+      return;
+     }
    if(!FileMove(temp, 0, g_queue_file, FILE_REWRITE))
       Print("TradingJournalBridge: cannot replace the queue file (error ", GetLastError(), ").");
   }
@@ -644,6 +711,15 @@ bool ValidateInputs()
      {
       Print("TradingJournalBridge: the token input is empty or contains spaces. Paste the token from the web app.");
       return false;
+     }
+   if(scheme == 7)
+     {
+      string host = StringSubstr(lower, 7);
+      int colon = StringFind(host, ":");
+      if(colon >= 0)
+         host = StringSubstr(host, 0, colon);
+      if(host != "localhost" && host != "127.0.0.1")
+         Print("TradingJournalBridge: WARNING ApiUrl uses plain http:// for a remote host, so requests are unencrypted. Use https://.");
      }
    g_base_url = url;
    g_headers = "Content-Type: application/json\r\nAuthorization: Bearer " + token + "\r\n";

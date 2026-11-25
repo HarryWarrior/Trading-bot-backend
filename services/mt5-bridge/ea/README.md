@@ -28,6 +28,7 @@ Answers of `POST /ingest/deals`:
 | 2xx | Batch done, removed from the queue |
 | 401 | Stops sending (deals stay queued); Alert + chart comment: create a new token |
 | 503, other 5xx, 408, 429, network error / timeout (`WebRequest` returns -1) | Batch stays queued; retry after 60 s, 120 s, 240 s, then every 300 s (cap 5 min) |
+| 3xx (redirect, not followed) | Batch stays queued and retried; the log says to set `ApiUrl` to the final https origin |
 | any other 4xx (422 `VALIDATION_ERROR`, `INVALID_DEAL_BATCH`, `JOURNAL_REJECTED`) | Batch dropped and logged in the Experts tab |
 
 Resending is always safe: the server is idempotent by (user, account, deal ticket).
@@ -86,7 +87,10 @@ other side of a DST change are shifted by one hour. To force a value set
 
 On every start the EA re-reads the last 3 days of history before the high-water mark, and every
 scan re-reads the last 5 minutes, so a missed event never loses a deal (duplicates are harmless).
-Deleting the global variable makes the next start resend the whole history. The token is never
+Deleting the global variable makes the next start resend the whole history. Every append starts
+on a fresh line and a queue line is used only if it is exactly one JSON object, so a line torn by a
+crash is skipped instead of breaking a batch. The queue is rewritten through a `.tmp` file that
+replaces it only when every write succeeded; on a write error the old queue is kept. The token is never
 stored in these files, printed, alerted or shown on the chart.
 
 ## Troubleshooting
@@ -101,6 +105,15 @@ stored in these files, printed, alerted or shown on the chart.
 | Deals never arrive | Check the Experts tab for "dropped a batch" (HTTP 4xx with the error code) or "kept in the queue" (server unreachable; it retries); inspect the queue file above |
 
 ## Limitations
+
+- **Backfills that span a DST change are off by one hour.** The EA applies the broker's
+  *current* server-to-UTC offset to every deal. New deals (sent as they happen) are right; deals
+  backfilled from before the broker's last DST switch are stored one hour early or late. Workaround:
+  set `AutoServerOffset = false` and `ServerUtcOffsetMinutes` before the first backfill (it still
+  applies one offset to all deals). Proper fix: a per-timestamp server-timezone rule like the `mt5`
+  service's `MT5_SERVER_TIMEZONE` *(planned follow-up)*. Accepted for spec 002 (owner-only use).
+- `ApiUrl` with plain `http://` is accepted for local development; for any host other than
+  `localhost`/`127.0.0.1` the EA prints a warning, because the request (and its token) is unencrypted.
 
 Untested because MQL5 cannot be compiled or run in this repository's CI (no MetaEditor, no terminal):
 

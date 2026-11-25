@@ -30,10 +30,12 @@ EA (MT5 terminal) --Bearer ingest token--> mt5-bridge --X-Service-Key--> journal
 Only the heartbeat creates or updates an account (balance, equity, status); deals never create one.
 
 The user creates a token in the web app (`POST /api/v1/mt5-bridge/tokens`, plaintext shown once) and
-pastes it into the EA. Retry rule for the EA on `/ingest/deals`: 200 accepted; 401 token unknown or
-revoked (stop, ask for a new token); any other 4xx (422 `VALIDATION_ERROR`, `INVALID_DEAL_BATCH`,
-`JOURNAL_REJECTED`) the batch can never be accepted, drop it; 503 `JOURNAL_UNAVAILABLE` keep the batch
-and retry. The EA sends a heartbeat in `OnInit` before any backfill, because `last_deal_at` only
+pastes it into the EA. Retry rule for the EA on `/ingest/deals`: 2xx accepted; 401 token unknown or
+revoked (stop sending, keep the queue, ask for a new token); 503 `JOURNAL_UNAVAILABLE`, any other 5xx,
+408, 429 and network errors or timeouts keep the batch and retry with exponential backoff capped at
+5 minutes; 3xx keeps the batch and logs "set ApiUrl to the final https origin"; any other 4xx
+(422 `VALIDATION_ERROR`, `INVALID_DEAL_BATCH`, `JOURNAL_REJECTED`) the batch can never be accepted,
+drop it and log. The EA sends a heartbeat in `OnInit` before any backfill, because `last_deal_at` only
 updates accounts that already exist. The EA source is `services/mt5-bridge/ea/TradingJournalBridge.mq5` (file queue, backoff capped at
 5 minutes, heartbeat every 60 s, see its README) *(awaiting compile and real-account verification, Task 8)*. Acceptance:
 `tests/acceptance_services/test_ea_bridge_flow.py`.

@@ -31,7 +31,11 @@ DEAL_DECIMALS = ("volume", "price", "commission", "swap", "fee", "profit")
 OPTIONAL_DEAL_DECIMALS = ("sl", "tp")
 # Every output call the EA could leak the token through.
 OUTPUT_CALLS = ("Print", "PrintFormat", "Alert", "Comment", "MessageBox", "SendNotification")
-SECRET_NAMES = ("IngestToken", "g_headers", "Authorization")
+# Identifiers that hold the token: the input, the header string and the local in ValidateInputs.
+SECRET_IDENTIFIERS = re.compile(r"\b(IngestToken|g_headers|token)\b")
+# Comments, string literals and char literals, removed before looking at code structure.
+_NOT_CODE = re.compile(r"""//[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])'""")
+_FUNCTION = re.compile(r"^[A-Za-z_]\w*\s+(\w+)\s*\(", re.M)
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -57,6 +61,36 @@ def _call_arguments(source: str, name: str) -> list[str]:
             index += 1
         found.append(source[start : index - 1])
     return found
+
+
+def _code_only(source: str) -> str:
+    """Source without comments and literals (literals become ``""``), so parentheses and braces
+    inside messages or JSON templates do not confuse the structural checks."""
+
+    def replace(match: re.Match[str]) -> str:
+        text = match.group(0)
+        return "" if text.startswith("//") else '""'
+
+    return _NOT_CODE.sub(replace, source)
+
+
+def _function_bodies(code: str) -> dict[str, str]:
+    """Body (between the outer braces) of every top-level function of the code-only source."""
+    bodies = {}
+    for match in _FUNCTION.finditer(code):
+        open_brace = code.find("{", match.end())
+        if open_brace < 0 or ";" in code[match.end() : open_brace]:
+            continue  # a declaration or a call, not a definition
+        depth, index = 1, open_brace + 1
+        while depth and index < len(code):
+            depth += {"{": 1, "}": -1}.get(code[index], 0)
+            index += 1
+        bodies[match.group(1)] = code[open_brace + 1 : index - 1]
+    return bodies
+
+
+def _ea_functions() -> dict[str, str]:
+    return _function_bodies(_code_only(_ea_source()))
 
 
 # --- sample payloads parse with the real request schemas ------------------------------------
@@ -184,16 +218,77 @@ def test_ea_serializes_every_schema_field():
 
 
 def test_ea_never_outputs_the_token():
-    source = _ea_source()
+    code = _code_only(_ea_source())
     for call in OUTPUT_CALLS:
-        for arguments in _call_arguments(source, call):
-            for secret in SECRET_NAMES:
-                assert secret not in arguments, f"{call}({arguments}) may leak the token"
+        for arguments in _call_arguments(code, call):
+            assert not SECRET_IDENTIFIERS.search(arguments), f"{call}({arguments}) may leak it"
 
 
 def test_ea_never_writes_the_token_to_files():
-    source = _ea_source()
+    code = _code_only(_ea_source())
     for call in ("FileWrite", "FileWriteString", "GlobalVariableSet"):
-        for arguments in _call_arguments(source, call):
-            for secret in SECRET_NAMES:
-                assert secret not in arguments, f"{call}({arguments}) may persist the token"
+        for arguments in _call_arguments(code, call):
+            assert not SECRET_IDENTIFIERS.search(arguments), f"{call}({arguments}) may persist it"
+
+
+def test_authorization_header_is_built_in_one_place_only():
+    lines = [line for line in _ea_source().splitlines() if "Authorization: Bearer" in line]
+    code_lines = [line for line in lines if not line.lstrip().startswith("//")]
+    assert len(code_lines) == 1 and "g_headers =" in code_lines[0]
+
+
+def test_header_string_is_used_only_to_reset_build_and_send():
+    code = _code_only(_ea_source())
+    functions = _function_bodies(code)
+    name = re.compile(r"\bg_headers\b")
+    users = {fn for fn, body in functions.items() if name.search(body)}
+    assert users == {"ResetState", "ValidateInputs", "Post"}
+    in_functions = sum(len(name.findall(body)) for body in functions.values())
+    assert len(name.findall(code)) == in_functions + 1  # + the global declaration
+    post = functions["Post"]
+    webrequest_args = _call_arguments(post, "WebRequest")
+    assert len(name.findall(post)) == 1
+    assert len(webrequest_args) == 1 and name.search(webrequest_args[0])
+
+
+# --- EA queue never loses deals on write errors ---------------------------------------------
+
+
+def test_every_queue_write_is_checked():
+    code = _code_only(_ea_source())
+    writes = re.findall(r"\bFileWriteString\s*\(", code)
+    checked = re.findall(r"\bFileWriteString\s*\([^()]*\)\s*(?:==|>)\s*0", code)
+    assert writes and len(checked) == len(writes)
+
+
+def test_rewrite_queue_flushes_before_replacing_and_keeps_the_old_queue_on_failure():
+    body = _ea_functions()["RewriteQueue"]
+    flush, move = body.find("FileFlush("), body.find("FileMove(")
+    delete_temp = body.find("FileDelete(temp)")
+    assert 0 <= flush < move
+    assert 0 <= delete_temp < move
+    assert "return" in body[delete_temp:move]  # the failure branch never reaches FileMove
+
+
+def test_append_failure_returns_false_and_does_not_advance_the_high_water_mark():
+    functions = _ea_functions()
+    append = functions["AppendToQueue"]
+    assert append.count("return false") == 2  # cannot open, cannot write
+    # A fresh line first, so a torn last line is never joined to the new deals.
+    seek = append.find("FileSeek(")
+    first_write = re.search(r"FileWriteString\s*\(\s*handle\s*,\s*\"\"\s*\)\s*>\s*0", append)
+    assert first_write and seek < first_write.start()
+    raw = _ea_source()
+    assert 'FileWriteString(handle, "\\r\\n") > 0' in raw
+    collect = functions["CollectNewDeals"]
+    guard = re.search(r"if\s*\(\s*!\s*AppendToQueue\s*\([^)]*\)\s*\)\s*return\s*;", collect)
+    assert guard
+    assert guard.end() < collect.find("RememberQueued(") < collect.find("GlobalVariableSet(")
+
+
+def test_queue_lines_must_be_exactly_one_json_object():
+    functions = _ea_functions()
+    assert "IsSingleJsonObject(" in functions["CleanLine"]
+    check = functions["IsSingleJsonObject"]
+    for piece in ("in_string", "escaped", "depth++", "depth--", "depth == 0 && i != len - 1"):
+        assert piece in check, piece
