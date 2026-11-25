@@ -136,7 +136,7 @@ def test_create_token_response_contains_plaintext_but_list_does_not(client):
     body = response.text
     assert plaintext not in body
     assert "hash" not in body
-    [listed] = response.json()["data"]["tokens"]
+    [listed] = response.json()["data"]["items"]
     assert listed["id"] == created["token"]["id"]
     assert "plaintext_token" not in listed
 
@@ -169,7 +169,7 @@ def test_revoke_unknown_or_foreign_token_is_404(client):
         response = client.delete(f"{BASE}/tokens/{target}", headers=auth(user))
         assert response.status_code == 404
         assert response.json()["error"]["code"] == "NOT_FOUND"
-    assert client.get(f"{BASE}/tokens", headers=auth("alice")).json()["data"]["tokens"][0]["active"]
+    assert client.get(f"{BASE}/tokens", headers=auth("alice")).json()["data"]["items"][0]["active"]
 
 
 # --- EA ingest (ingest token) ---------------------------------------------------------------
@@ -202,7 +202,7 @@ def test_token_updates_last_used_at(client, tokens, clock):
         headers=bearer(created["plaintext_token"]),
     )
     assert response.status_code == 200
-    [listed] = client.get(f"{BASE}/tokens", headers=auth()).json()["data"]["tokens"]
+    [listed] = client.get(f"{BASE}/tokens", headers=auth()).json()["data"]["items"]
     assert listed["last_used_at"] == "2026-01-01T12:07:00Z"
 
 
@@ -231,7 +231,7 @@ def test_deals_update_last_deal_at_of_the_account(client, clock):
         json=deals_body([raw(1, "2026-03-02T08:00:00Z"), raw(2, "2026-03-02T09:30:00Z")]),
         headers=bearer(plaintext),
     )
-    [account] = client.get(f"{BASE}/accounts", headers=auth()).json()["data"]["accounts"]
+    [account] = client.get(f"{BASE}/accounts", headers=auth()).json()["data"]["items"]
     assert account["last_deal_at"] == "2026-03-02T09:30:00Z"
 
 
@@ -304,7 +304,7 @@ def test_heartbeat_upserts_account_and_lists_status(client, clock):
         assert response.status_code == 200
     assert response.json()["data"]["account"]["account_ref"] == "123456@Demo-Server"
 
-    [account] = client.get(f"{BASE}/accounts", headers=auth()).json()["data"]["accounts"]
+    [account] = client.get(f"{BASE}/accounts", headers=auth()).json()["data"]["items"]
     assert account == {
         "account_ref": "123456@Demo-Server",
         "login": 123456,
@@ -317,7 +317,7 @@ def test_heartbeat_upserts_account_and_lists_status(client, clock):
         "status": "connected",
     }
     clock.advance(timedelta(minutes=6))
-    [account] = client.get(f"{BASE}/accounts", headers=auth()).json()["data"]["accounts"]
+    [account] = client.get(f"{BASE}/accounts", headers=auth()).json()["data"]["items"]
     assert account["status"] == "disconnected"
 
 
@@ -338,16 +338,16 @@ def test_token_of_user_a_never_lists_or_writes_user_b(client, journal):
     client.post(f"{BASE}/ingest/heartbeat", json=heartbeat_body(), headers=bearer(alice))
     client.post(f"{BASE}/ingest/deals", json=deals_body([raw(1)]), headers=bearer(alice))
 
-    assert client.get(f"{BASE}/accounts", headers=auth("bob")).json()["data"]["accounts"] == []
-    bob_tokens = client.get(f"{BASE}/tokens", headers=auth("bob")).json()["data"]["tokens"]
+    assert client.get(f"{BASE}/accounts", headers=auth("bob")).json()["data"]["items"] == []
+    bob_tokens = client.get(f"{BASE}/tokens", headers=auth("bob")).json()["data"]["items"]
     assert [t["name"] for t in bob_tokens] == ["Laptop EA"]
-    alice_tokens = client.get(f"{BASE}/tokens", headers=auth("alice")).json()["data"]["tokens"]
+    alice_tokens = client.get(f"{BASE}/tokens", headers=auth("alice")).json()["data"]["items"]
     assert {t["id"] for t in alice_tokens}.isdisjoint({t["id"] for t in bob_tokens})
     assert [user for user, _, _ in journal.calls] == ["alice"]
 
     client.post(f"{BASE}/ingest/heartbeat", json=heartbeat_body(), headers=bearer(bob))
-    [alice_acc] = client.get(f"{BASE}/accounts", headers=auth("alice")).json()["data"]["accounts"]
-    [bob_acc] = client.get(f"{BASE}/accounts", headers=auth("bob")).json()["data"]["accounts"]
+    [alice_acc] = client.get(f"{BASE}/accounts", headers=auth("alice")).json()["data"]["items"]
+    [bob_acc] = client.get(f"{BASE}/accounts", headers=auth("bob")).json()["data"]["items"]
     assert alice_acc["account_ref"] == bob_acc["account_ref"] == "123456@Demo-Server"
 
 
@@ -389,3 +389,63 @@ def test_default_ea_path_points_at_the_service_ea_folder():
     assert path.name == "TradingJournalBridge.ex5"
     assert path.parent.name == "ea"
     assert path.parent.parent.name == "mt5-bridge"
+
+
+# --- pagination -----------------------------------------------------------------------------
+
+
+def test_tokens_are_paginated_newest_first_and_never_leak_other_users(client, clock):
+    for name in ("one", "two", "three"):
+        issue(client, "alice", name)
+        clock.advance(timedelta(minutes=1))
+    issue(client, "bob", "bob's")
+
+    first = client.get(f"{BASE}/tokens?page=1&page_size=2", headers=auth("alice")).json()["data"]
+    assert [t["name"] for t in first["items"]] == ["three", "two"]
+    assert first["pagination"] == {
+        "page": 1,
+        "page_size": 2,
+        "total_items": 3,
+        "total_pages": 2,
+        "has_next": True,
+        "has_prev": False,
+    }
+    second = client.get(f"{BASE}/tokens?page=2&page_size=2", headers=auth("alice")).json()["data"]
+    assert [t["name"] for t in second["items"]] == ["one"]
+    assert (second["pagination"]["has_next"], second["pagination"]["has_prev"]) == (False, True)
+    beyond = client.get(f"{BASE}/tokens?page=3&page_size=2", headers=auth("alice")).json()["data"]
+    assert beyond["items"] == []
+    assert beyond["pagination"]["total_items"] == 3
+
+    bob = client.get(f"{BASE}/tokens?page_size=100", headers=auth("bob")).json()["data"]
+    assert [t["name"] for t in bob["items"]] == ["bob's"]
+    assert bob["pagination"]["total_items"] == 1
+
+
+def test_accounts_are_paginated_by_account_ref_and_never_leak_other_users(client):
+    alice = issue(client, "alice")["plaintext_token"]
+    bob = issue(client, "bob")["plaintext_token"]
+    for login in (333, 111, 222):
+        client.post(
+            f"{BASE}/ingest/heartbeat", json=heartbeat_body(login=login), headers=bearer(alice)
+        )
+    client.post(f"{BASE}/ingest/heartbeat", json=heartbeat_body(login=999), headers=bearer(bob))
+
+    first = client.get(f"{BASE}/accounts?page=1&page_size=2", headers=auth("alice")).json()["data"]
+    assert [a["login"] for a in first["items"]] == [111, 222]
+    assert first["pagination"]["total_items"] == 3
+    assert first["pagination"]["has_next"] is True
+    second = client.get(f"{BASE}/accounts?page=2&page_size=2", headers=auth("alice")).json()
+    assert [a["login"] for a in second["data"]["items"]] == [333]
+
+    bob_page = client.get(f"{BASE}/accounts", headers=auth("bob")).json()["data"]
+    assert [a["login"] for a in bob_page["items"]] == [999]
+    assert bob_page["pagination"]["total_items"] == 1
+
+
+@pytest.mark.parametrize("query", ["page=0", "page_size=0", "page_size=101", "page=x"])
+def test_invalid_page_params_are_422(client, query):
+    for path in ("tokens", "accounts"):
+        response = client.get(f"{BASE}/{path}?{query}", headers=auth())
+        assert response.status_code == 422, (path, query)
+        assert response.json()["error"]["code"] == "VALIDATION_ERROR"

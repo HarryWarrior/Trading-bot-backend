@@ -146,10 +146,6 @@ class TokenEnvelope(BaseModel):
     token: TokenOut
 
 
-class TokensEnvelope(BaseModel):
-    tokens: list[TokenOut]
-
-
 class AccountOut(BaseModel):
     account_ref: str
     login: int
@@ -182,7 +178,3 @@ class AccountOut(BaseModel):
 
 class AccountEnvelope(BaseModel):
     account: AccountOut
-
-
-class AccountsEnvelope(BaseModel):
-    accounts: list[AccountOut]

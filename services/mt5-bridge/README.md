@@ -13,9 +13,9 @@ Status: HTTP API and journal forwarding built. The EA itself is *(planned, spec 
 | POST | `/ingest/deals` | `Bearer <ingest token>` | `{account_login, server, deals: [...]}`, at most 200 deals, tz-aware times |
 | POST | `/ingest/heartbeat` | `Bearer <ingest token>` | `{account_login, server, balance, equity, terminal_build?}`; upserts the account |
 | POST | `/tokens` | JWT | `{name}` -> 201 with `plaintext_token` (the only time it is returned) |
-| GET | `/tokens` | JWT | `{tokens: [...]}`, never the plaintext or the hash |
+| GET | `/tokens` | JWT | `Page` (`items`, `pagination`; `page`, `page_size`), newest first; never the plaintext or the hash |
 | DELETE | `/tokens/{id}` | JWT | Revoke (idempotent); 404 for unknown or another user's token |
-| GET | `/accounts` | JWT | `{accounts: [...]}` with `status` `connected` / `disconnected` (5 min rule) |
+| GET | `/accounts` | JWT | `Page` by `account_ref`, each with `status` `connected` / `disconnected` (5 min rule) |
 | GET | `/ea/download` | JWT | Serves `ea/TradingJournalBridge.ex5`; 404 `NOT_FOUND` until it is built |
 
 Every ingest request updates the token's `last_used_at`; the owner always comes from the token.

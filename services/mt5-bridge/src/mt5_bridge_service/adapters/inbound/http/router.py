@@ -4,6 +4,9 @@ EA-facing (``Authorization: Bearer <ingest token>``): ``/ingest/deals``, ``/inge
 User-facing (JWT from auth): ``/tokens``, ``/accounts``, ``/ea/download``.
 """
 
+from collections.abc import Sequence
+from typing import TypeVar
+
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 
@@ -11,7 +14,6 @@ from mt5_bridge_service.adapters.inbound.http.dependencies import get_container
 from mt5_bridge_service.adapters.inbound.http.schemas import (
     AccountEnvelope,
     AccountOut,
-    AccountsEnvelope,
     CreatedTokenOut,
     CreateTokenIn,
     HeartbeatIn,
@@ -19,7 +21,6 @@ from mt5_bridge_service.adapters.inbound.http.schemas import (
     IngestDealsOut,
     TokenEnvelope,
     TokenOut,
-    TokensEnvelope,
 )
 from mt5_bridge_service.adapters.inbound.http.token_auth import ingest_token_owner
 from mt5_bridge_service.bootstrap import Container
@@ -27,10 +28,13 @@ from mt5_bridge_service.domain.account import AccountStatus
 from mt5_bridge_service.domain.errors import DomainError
 from mt5_bridge_service.domain.token import IngestToken
 from trading_shared.auth import CurrentUser, current_user_dependency
-from trading_shared.envelope import SuccessResponse, ok
+from trading_shared.envelope import Page, PageParams, SuccessResponse, build_pagination, ok
 from trading_shared.errors import AppError, ErrorBody, ErrorResponse
+from trading_shared.http import page_params
 
 EA_DOWNLOAD_NAME = "TradingJournalBridge.ex5"
+
+T = TypeVar("T")
 
 router = APIRouter(prefix="/api/v1/mt5-bridge", tags=["mt5-bridge"])
 
@@ -38,6 +42,12 @@ router = APIRouter(prefix="/api/v1/mt5-bridge", tags=["mt5-bridge"])
 def _current_user(request: Request) -> CurrentUser:
     secret = request.app.state.container.settings.jwt_secret_key.get_secret_value()
     return current_user_dependency(lambda: secret)(request.headers.get("authorization"))
+
+
+def _paginate(items: Sequence[T], params: PageParams) -> tuple[list[T], int]:
+    # A user has a handful of tokens and accounts: paging the use case result in memory is enough.
+    start = (params.page - 1) * params.page_size
+    return list(items[start : start + params.page_size]), len(items)
 
 
 def to_app_error(error: DomainError) -> AppError:
@@ -98,12 +108,17 @@ async def create_token(
 
 @router.get("/tokens")
 async def list_tokens(
+    params: PageParams = Depends(page_params),
     user: CurrentUser = Depends(_current_user),
     container: Container = Depends(get_container),
-) -> SuccessResponse[TokensEnvelope]:
-    tokens = await container.list_tokens.execute(user.id)
-    out = TokensEnvelope(tokens=[TokenOut.from_domain(t) for t in tokens])
-    return ok(out, container.settings.version)
+) -> SuccessResponse[Page[TokenOut]]:
+    """Newest first."""
+    tokens, total = _paginate(await container.list_tokens.execute(user.id), params)
+    page = Page[TokenOut](
+        items=[TokenOut.from_domain(t) for t in tokens],
+        pagination=build_pagination(params.page, params.page_size, total),
+    )
+    return ok(page, container.settings.version)
 
 
 @router.delete("/tokens/{token_id}")
@@ -119,12 +134,17 @@ async def revoke_token(
 
 @router.get("/accounts")
 async def list_accounts(
+    params: PageParams = Depends(page_params),
     user: CurrentUser = Depends(_current_user),
     container: Container = Depends(get_container),
-) -> SuccessResponse[AccountsEnvelope]:
-    overviews = await container.list_accounts.execute(user.id)
-    out = AccountsEnvelope(accounts=[AccountOut.from_overview(o) for o in overviews])
-    return ok(out, container.settings.version)
+) -> SuccessResponse[Page[AccountOut]]:
+    """Ordered by ``account_ref``."""
+    overviews, total = _paginate(await container.list_accounts.execute(user.id), params)
+    page = Page[AccountOut](
+        items=[AccountOut.from_overview(o) for o in overviews],
+        pagination=build_pagination(params.page, params.page_size, total),
+    )
+    return ok(page, container.settings.version)
 
 
 @router.get("/ea/download", response_model=None)
