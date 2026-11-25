@@ -6,7 +6,7 @@
 flowchart LR
   trader([Trader]) --> web[Web app<br/>trading-bot-frontend]
   ai([AI agent<br/>MCP / API]) -. planned 004 .-> gw
-  ea[MT5 terminal + EA bridge<br/>EA built: planned 002 Task 7] -->|ingest token| bridge
+  ea[MT5 terminal + EA bridge<br/>EA source written<br/>compile + real-account check: Task 8] -->|ingest token| bridge
   web --> gw[API gateway<br/>Traefik — planned 001]
   gw --> svc[Backend services]
   svc --> mongo[(MongoDB)]
@@ -34,7 +34,8 @@ pastes it into the EA. Retry rule for the EA on `/ingest/deals`: 200 accepted; 4
 revoked (stop, ask for a new token); any other 4xx (422 `VALIDATION_ERROR`, `INVALID_DEAL_BATCH`,
 `JOURNAL_REJECTED`) the batch can never be accepted, drop it; 503 `JOURNAL_UNAVAILABLE` keep the batch
 and retry. The EA sends a heartbeat in `OnInit` before any backfill, because `last_deal_at` only
-updates accounts that already exist. The EA itself is *(planned, spec 002 Task 7)*. Acceptance:
+updates accounts that already exist. The EA source is `services/mt5-bridge/ea/TradingJournalBridge.mq5` (file queue, backoff capped at
+5 minutes, heartbeat every 60 s, see its README) *(awaiting compile and real-account verification, Task 8)*. Acceptance:
 `tests/acceptance_services/test_ea_bridge_flow.py`.
 
 ## 2. Target containers (services)

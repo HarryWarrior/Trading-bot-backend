@@ -4,7 +4,8 @@ Receives what our MT5 Expert Advisor pushes (spec 002, ADR 0002): per-user **ing
 user's **broker accounts** with their heartbeat status, and raw deals forwarded to `journal`.
 Never stores broker passwords.
 
-Status: HTTP API and journal forwarding built. The EA itself is *(planned, spec 002 Task 7)*.
+Status: HTTP API and journal forwarding built. The EA source is in [`ea/`](ea/README.md)
+*(awaiting compile and real-account verification, Task 8)*.
 
 ## API (prefix `/api/v1/mt5-bridge`, standard envelope)
 
