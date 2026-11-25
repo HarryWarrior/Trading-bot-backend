@@ -4,7 +4,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from mt5_bridge_service.adapters.inbound.http.router import router
+from mt5_bridge_service.adapters.inbound.http.router import register_bridge_error_mapping, router
+from mt5_bridge_service.application.ports.accounts import AccountRepository
+from mt5_bridge_service.application.ports.clock import Clock
+from mt5_bridge_service.application.ports.journal import JournalGateway
+from mt5_bridge_service.application.ports.tokens import TokenRepository
 from mt5_bridge_service.bootstrap import build_container
 from mt5_bridge_service.settings import BridgeSettings
 from trading_shared.errors import register_error_handlers
@@ -12,10 +16,16 @@ from trading_shared.logging import configure_logging
 from trading_shared.request_id import RequestIdMiddleware
 
 
-def create_app(settings: BridgeSettings | None = None) -> FastAPI:
+def create_app(
+    settings: BridgeSettings | None = None,
+    journal: JournalGateway | None = None,
+    tokens: TokenRepository | None = None,
+    accounts: AccountRepository | None = None,
+    clock: Clock | None = None,
+) -> FastAPI:
     settings = settings or BridgeSettings()
     configure_logging(settings.log_level)
-    container = build_container(settings)
+    container = build_container(settings, journal, tokens, accounts, clock)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -38,6 +48,7 @@ def create_app(settings: BridgeSettings | None = None) -> FastAPI:
     )
     app.add_middleware(RequestIdMiddleware)
     register_error_handlers(app)
+    register_bridge_error_mapping(app)
     app.include_router(router)
 
     @app.get("/health", tags=["health"])

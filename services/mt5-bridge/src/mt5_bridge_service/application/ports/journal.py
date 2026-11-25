@@ -18,4 +18,6 @@ class JournalGateway(Protocol):
 
     async def ingest_deals(
         self, user_id: str, account_ref: str, deals: list[RawDeal]
-    ) -> IngestDealsResult: ...
+    ) -> IngestDealsResult:
+        """Raises JournalUnavailable (retryable) or JournalRejected (never retryable)."""
+        ...

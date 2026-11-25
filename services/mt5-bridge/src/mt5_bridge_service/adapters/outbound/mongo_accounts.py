@@ -58,6 +58,12 @@ class MongoAccountRepository:
         cursor = self._col.find({"user_id": user_id}).sort("account_ref", ASCENDING)
         return [self._to_domain(doc) async for doc in cursor]
 
+    async def touch_last_deal(self, user_id: str, account_ref: str, at: datetime) -> None:
+        # $max: a backfill of old deals never moves last_deal_at backwards; BSON null < date.
+        await self._col.update_one(
+            {"user_id": user_id, "account_ref": account_ref}, {"$max": {"last_deal_at": at}}
+        )
+
     @staticmethod
     def _to_domain(doc: dict[str, Any]) -> BrokerAccount:
         return BrokerAccount(

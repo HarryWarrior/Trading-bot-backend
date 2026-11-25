@@ -1,11 +1,35 @@
 # MT5 bridge service (`mt5-bridge`, port 8005)
 
 Receives what our MT5 Expert Advisor pushes (spec 002, ADR 0002): per-user **ingest tokens**, the
-user's **broker accounts** with their heartbeat status, and (planned) raw deals forwarded to `journal`.
+user's **broker accounts** with their heartbeat status, and raw deals forwarded to `journal`.
 Never stores broker passwords.
 
-Status: domain, use cases and Mongo storage built. HTTP API (tokens, accounts, EA ingest/heartbeat,
-EA download) and the journal gateway are *(planned, spec 002 Task 4)*; today only `/health` is served.
+Status: HTTP API and journal forwarding built. The EA itself is *(planned, spec 002 Task 7)*.
+
+## API (prefix `/api/v1/mt5-bridge`, standard envelope)
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| POST | `/ingest/deals` | `Bearer <ingest token>` | `{account_login, server, deals: [...]}`, at most 200 deals, tz-aware times |
+| POST | `/ingest/heartbeat` | `Bearer <ingest token>` | `{account_login, server, balance, equity, terminal_build?}`; upserts the account |
+| POST | `/tokens` | JWT | `{name}` -> 201 with `plaintext_token` (the only time it is returned) |
+| GET | `/tokens` | JWT | `{tokens: [...]}`, never the plaintext or the hash |
+| DELETE | `/tokens/{id}` | JWT | Revoke (idempotent); 404 for unknown or another user's token |
+| GET | `/accounts` | JWT | `{accounts: [...]}` with `status` `connected` / `disconnected` (5 min rule) |
+| GET | `/ea/download` | JWT | Serves `ea/TradingJournalBridge.ex5`; 404 `NOT_FOUND` until it is built |
+
+Every ingest request updates the token's `last_used_at`; the owner always comes from the token.
+Deals go to journal's `POST /api/v1/journal/ingest/deals` with `X-Service-Key`, and
+`last_deal_at` of an existing account moves forward once journal accepts them.
+
+EA retry contract for `/ingest/deals`:
+
+| Answer | Meaning for the EA |
+|---|---|
+| 200 | Accepted (idempotent: resending is harmless) |
+| 401 `UNAUTHENTICATED` | Token unknown or revoked: stop and ask the user for a new token |
+| 422 `VALIDATION_ERROR` / `INVALID_DEAL_BATCH` / `JOURNAL_REJECTED` | The batch can never be accepted: do not retry it |
+| 503 `JOURNAL_UNAVAILABLE` | Journal down, timed out or misconfigured: keep the batch queued and retry |
 
 ## Layers
 
@@ -14,10 +38,11 @@ src/mt5_bridge_service/
   domain/            # IngestToken (hash only), BrokerAccount + Heartbeat (status: 5 min rule), RawDeal
   application/
     ports/           # TokenRepository, AccountRepository, JournalGateway, Clock, IdGenerator
-    use_cases/       # IssueIngestToken, RevokeIngestToken, ListIngestTokens, RecordHeartbeat, ListAccounts
+    use_cases/       # IssueIngestToken, RevokeIngestToken, ListIngestTokens, AuthenticateIngestToken,
+                     # RecordHeartbeat, ListAccounts, IngestDeals
   adapters/
-    inbound/http/    # FastAPI router (prefix /api/v1/mt5-bridge)
-    outbound/        # MongoTokenRepository, MongoAccountRepository, SystemClock, UuidIdGenerator
+    inbound/http/    # router, schemas, token_auth (ingest token bearer)
+    outbound/        # JournalHttpGateway, MongoTokenRepository, MongoAccountRepository, SystemClock, UuidIdGenerator
   settings.py  bootstrap.py  main.py
 ```
 
@@ -33,7 +58,9 @@ Every query filters by `user_id`, except the token lookup by hash (that is how t
 ## Configuration (`.env`, git-ignored; copy `.env.example`)
 
 `JWT_SECRET_KEY` (same as auth), `INGEST_SERVICE_KEY` (same as journal), `JOURNAL_URL`, `MONGO_URL`,
-`MONGO_DB` (default `bridge_db`), `CORS_ORIGINS`, `ENVIRONMENT`, `LOG_LEVEL`.
+`MONGO_DB` (default `bridge_db`), `CORS_ORIGINS`, `ENVIRONMENT`, `LOG_LEVEL`, optional
+`JOURNAL_TIMEOUT_SECONDS` (default 10) and `EA_FILE_PATH` (default `ea/TradingJournalBridge.ex5` of
+this folder; the Dockerfile sets it for the installed package).
 
 ## Run & test (from the repository root)
 

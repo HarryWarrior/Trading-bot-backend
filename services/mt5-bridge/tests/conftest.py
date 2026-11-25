@@ -7,7 +7,9 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from mt5_bridge_service.application.ports.journal import IngestDealsResult
 from mt5_bridge_service.domain.account import BrokerAccount
+from mt5_bridge_service.domain.deal import RawDeal
 from mt5_bridge_service.domain.token import IngestToken
 
 
@@ -77,6 +79,29 @@ class FakeAccountRepository:
         mine = [a for a in self.rows.values() if a.user_id == user_id]
         return sorted(mine, key=lambda a: a.account_ref)
 
+    async def touch_last_deal(self, user_id: str, account_ref: str, at: datetime) -> None:
+        existing = self.rows.get((user_id, account_ref))
+        if existing is None:
+            return
+        if existing.last_deal_at is None or at > existing.last_deal_at:
+            self.rows[(user_id, account_ref)] = replace(existing, last_deal_at=at)
+
+
+class FakeJournalGateway:
+    """Records every forwarded batch; set ``error`` to make the next calls raise it."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, list[RawDeal]]] = []
+        self.error: Exception | None = None
+
+    async def ingest_deals(
+        self, user_id: str, account_ref: str, deals: list[RawDeal]
+    ) -> IngestDealsResult:
+        if self.error is not None:
+            raise self.error
+        self.calls.append((user_id, account_ref, list(deals)))
+        return IngestDealsResult(received=len(deals), new=len(deals), trades_upserted=1)
+
 
 @pytest.fixture
 def clock() -> FixedClock:
@@ -96,3 +121,8 @@ def tokens() -> FakeTokenRepository:
 @pytest.fixture
 def accounts() -> FakeAccountRepository:
     return FakeAccountRepository()
+
+
+@pytest.fixture
+def journal() -> FakeJournalGateway:
+    return FakeJournalGateway()

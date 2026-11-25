@@ -159,3 +159,23 @@ async def test_account_key_is_unique_per_user(accounts, db):
     await accounts.upsert_heartbeat(_account())
     with pytest.raises(pymongo.errors.DuplicateKeyError):
         await db["accounts"].insert_one({"user_id": "u1", "account_ref": "123@Broker-Demo"})
+
+
+async def test_touch_last_deal_only_raises_it_and_only_for_owner(accounts, db):
+    await accounts.upsert_heartbeat(_account("u1"))
+    await accounts.upsert_heartbeat(_account("u2"))
+    newer = T0 + timedelta(hours=1)
+
+    await accounts.touch_last_deal("u1", "123@Broker-Demo", newer)
+    await accounts.touch_last_deal("u1", "123@Broker-Demo", T0 - timedelta(days=9))
+    await accounts.touch_last_deal("u1", "999@Broker-Demo", newer)
+
+    [mine] = await accounts.list_for_user("u1")
+    [theirs] = await accounts.list_for_user("u2")
+    assert mine.last_deal_at == newer
+    assert theirs.last_deal_at is None
+    assert await db["accounts"].count_documents({}) == 2
+
+    await accounts.upsert_heartbeat(_account("u1", at=newer + timedelta(minutes=1)))
+    [mine] = await accounts.list_for_user("u1")
+    assert mine.last_deal_at == newer

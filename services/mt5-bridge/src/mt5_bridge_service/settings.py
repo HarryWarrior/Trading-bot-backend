@@ -1,9 +1,13 @@
+from pathlib import Path
+
 from pydantic import AliasChoices, Field, SecretStr, field_validator
 
 from trading_shared.settings import BaseServiceSettings
 
 MIN_JWT_SECRET_LENGTH = 32
 MIN_SERVICE_KEY_LENGTH = 32
+# services/mt5-bridge/ea/TradingJournalBridge.ex5 in a source checkout (compiled by the owner).
+DEFAULT_EA_FILE = Path(__file__).resolve().parents[2] / "ea" / "TradingJournalBridge.ex5"
 
 
 class BridgeSettings(BaseServiceSettings):
@@ -21,6 +25,8 @@ class BridgeSettings(BaseServiceSettings):
     # Same value as the journal service: authorizes the bridge on POST /ingest/deals.
     ingest_service_key: SecretStr
     journal_url: str = "http://localhost:8002"
+    journal_timeout_seconds: float = Field(default=10.0, gt=0)
+    ea_file_path: Path = DEFAULT_EA_FILE
     cors_origins: list[str] = ["http://localhost:3000"]
 
     @field_validator("jwt_secret_key")

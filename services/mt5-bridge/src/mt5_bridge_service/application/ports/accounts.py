@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Protocol
 
 from mt5_bridge_service.domain.account import BrokerAccount
@@ -13,4 +14,11 @@ class AccountRepository(Protocol):
 
     async def list_for_user(self, user_id: str) -> list[BrokerAccount]:
         """Ordered by ``account_ref``."""
+        ...
+
+    async def touch_last_deal(self, user_id: str, account_ref: str, at: datetime) -> None:
+        """Raise ``last_deal_at`` to ``at`` (never lowers it).
+
+        No-op when the user has no such account yet: accounts are created by heartbeats.
+        """
         ...

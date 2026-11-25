@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
+# One EA request; journal accepts up to 1000 per call, so a batch is always forwarded whole.
+MAX_DEALS_PER_REQUEST = 200
+
 
 @dataclass(frozen=True)
 class RawDeal:
