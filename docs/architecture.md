@@ -27,6 +27,14 @@ EA (MT5 terminal) --Bearer ingest token--> mt5-bridge --X-Service-Key--> journal
                                             account
 ```
 
+**One path per account.** The old `mt5` service and the EA push both upsert the same trade document
+under `(user_id, account_ref, position_id)`; `source` stays `mt5`, the last writer wins, and they
+format times (DST-aware zone vs one current offset) and prices slightly differently. If both run,
+the `mt5` service's times win only until the next EA push of that position.
+
+**Journal ingest trust.** `/api/v1/journal/ingest/*` is guarded only by `INGEST_SERVICE_KEY`: anyone
+holding the key can write any user's journal, so the planned gateway must never route it publicly.
+
 Only the heartbeat creates or updates an account (balance, equity, status); deals never create one.
 
 The user creates a token in the web app (`POST /api/v1/mt5-bridge/tokens`, plaintext shown once) and

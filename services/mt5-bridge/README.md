@@ -29,6 +29,11 @@ and logged at WARNING (ids and reasons only). When journal refuses a batch (422 
 bridge logs the ticket range and count at WARNING (never the payload), so a stuck batch can be skipped
 by raising the EA high-water mark above its last ticket.
 
+Use **one path per account**: the old `mt5` service (DST-aware server timezone) and the EA push
+(one current UTC offset) both upsert the same trade document under `(user_id, account_ref, position_id)`
+with `source` `mt5`. Last writer wins: if both run, the `mt5` service's times win only until the next
+EA push of that position, and price formatting differs slightly between the two.
+
 EA retry contract for `/ingest/deals`:
 
 | Answer | Meaning for the EA |

@@ -122,3 +122,15 @@ async def test_duplicate_ticket_within_one_batch_is_stored_once(journal):
     result = await journal.ingest_deals().execute("u1", ACCOUNT, [ENTRY, ENTRY, EXIT])
     assert (result.received, result.new, result.trades_upserted) == (3, 2, 1)
     assert len(journal.deals.rows) == 2
+
+
+async def test_mt5_service_trade_and_ea_deals_of_one_position_share_one_trade_document(
+    journal, parsed_trade
+):
+    """Both ingest paths key trades by (user_id, account_ref, position_id): last writer wins."""
+    await journal.ingest().execute("u1", ACCOUNT, [parsed_trade("7")], [])
+    await journal.ingest_deals().execute("u1", ACCOUNT, [ENTRY, EXIT])
+
+    [trade] = await journal.trades.all_for("u1", ACCOUNT)
+    assert trade.position_id == "7"
+    assert trade.profit == D("100")  # the EA push, written last, won
