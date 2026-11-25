@@ -7,6 +7,13 @@ Usage (from services/auth):
 import argparse
 import asyncio
 import sys
+from pathlib import Path
+
+# Run from anywhere: make the service and the shared lib importable without installing them.
+_ROOT = Path(__file__).resolve().parents[3]
+for _p in (_ROOT / 'services' / 'auth' / 'src', _ROOT / 'libs' / 'shared' / 'src', _ROOT / 'libs' / 'shared'):
+    if _p.is_dir() and str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 from auth_service.adapters.outbound.mongo_repositories import MongoUserRepository
 from auth_service.application.use_cases.promote_to_admin import PromoteToAdmin, UserNotFound
