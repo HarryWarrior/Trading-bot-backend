@@ -22,9 +22,12 @@ strategies promoted to paper and live trading.
 ```
 EA (MT5 terminal) --Bearer ingest token--> mt5-bridge --X-Service-Key--> journal
   POST /ingest/heartbeat                    resolves owner from the token   POST /ingest/deals
-  POST /ingest/deals (<= 200 deals)         upserts account, forwards deals stores raw deals, pairs by position_id,
-                                                                            upserts trades (idempotent)
+  POST /ingest/deals (<= 200 deals)         forwards deals, touches        stores raw deals, pairs by position_id,
+                                            last_deal_at of an existing    upserts trades (idempotent)
+                                            account
 ```
+
+Only the heartbeat creates or updates an account (balance, equity, status); deals never create one.
 
 The user creates a token in the web app (`POST /api/v1/mt5-bridge/tokens`, plaintext shown once) and
 pastes it into the EA. Retry rule for the EA on `/ingest/deals`: 200 accepted; 401 token unknown or
