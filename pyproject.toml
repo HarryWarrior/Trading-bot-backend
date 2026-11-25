@@ -6,6 +6,9 @@ target-version = "py311"
 line-length = 100
 
 # Files to exclude
+# Agent rule docs keep hand-aligned code samples; they are not source files.
+extend-exclude = [".agents/**/*.md"]
+
 exclude = [
     ".git",
     ".venv",
