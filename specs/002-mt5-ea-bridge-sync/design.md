@@ -1,6 +1,6 @@
 # 002 — MT5 automatic sync via EA bridge (design)
 
-- **Status:** draft — awaiting owner approval
+- **Status:** in-progress (design approved 2026-11-24)
 - **Date:** 2026-11-24
 - **Repos:** backend (this doc) · frontend counterpart: `trading-bot-frontend/specs/002-mt5-connection-ui/design.md`
 - **Services touched:** new `mt5-bridge`; `journal` (raw-deal ingest + pairing); new MQL5 EA under `services/mt5-bridge/ea/`
@@ -53,9 +53,9 @@ password; a setup so hard users give up; EA logic that must change when opened t
 
 | Candidate | Purpose | Verdict |
 |---|---|---|
-| Open-source MQL5 REST/WebRequest bridge EAs on GitHub | Reuse transport/JSON/retry code | TBD |
-| ZeroMQ-based MT5 bridges | Alternative transport | TBD |
-| MetaApi (cloud) | Fallback adapter for users who cannot run a terminal 24/7 | TBD |
+| Open-source MQL5 REST/WebRequest bridge EAs on GitHub | Reuse transport/JSON/retry code | Not adopted: none maintained with a permissive license and retry/queue; EA written from scratch on native `WebRequest` |
+| ZeroMQ-based MT5 bridges | Alternative transport | Not adopted: needs DLLs ("Allow DLL imports") and a listener; GPL-3.0 in one case |
+| MetaApi (cloud) | Fallback adapter for users who cannot run a terminal 24/7 | Not adopted now: stores broker credentials (violates ADR 0002) and is paid; kept as a future fallback adapter. Full log: [docs/integrations/README.md](../../docs/integrations/README.md) |
 
 Criteria: license, maintenance, JSON handling in MQL5, retry/queue support. Record in
 `docs/integrations/README.md`.

@@ -18,7 +18,11 @@ design (draft) → owner approves (approved) → plan.md → execute with TDD (i
 |---|---|---|---|---|
 | 000 | Agents foundation (rules, templates, docs, spec workflow) | done | [design](000-agents-foundation/design.md) · [plan](000-agents-foundation/plan.md) | yes |
 | 001 | Real data only: auth, journal, analytics, MT5 services | done | [design](001-service-migration/design.md) | yes |
-| 002 | MT5 automatic sync via EA bridge | draft | [design](002-mt5-ea-bridge-sync/design.md) | yes |
+| 002 | MT5 automatic sync via EA bridge | in-progress | [design](002-mt5-ea-bridge-sync/design.md) | yes |
 | 003 | Strategy → backtest → paper → live bot | draft | [design](003-strategy-backtest-live/design.md) | yes |
 | 004 | AI-filled journal (MCP / API) | draft | [design](004-ai-journal/design.md) | yes |
 | 005 | EA distribution, MQL5 Market and selling | draft | [design](005-ea-distribution-and-market/design.md) | no |
+
+## Backlog
+
+- **EA server-timezone fix (follow-up of 002):** the EA converts deal times with one current UTC offset, so a backfill spanning a DST change is off by 1 h. Replace it with a server-timezone rule like the `mt5` service's ZoneConverter, ideally converted server-side.

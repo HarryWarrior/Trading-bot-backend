@@ -127,3 +127,11 @@
 ## Rulings
 
 Deviations decided during execution: `Task N: <finding> — <decision> — <cost if wrong>`.
+
+- Task 1: docs-only; controller verified the diff instead of a reviewer seat — accepted — cost: a wrong license note.
+- Task 5: acceptance test placed in `tests/acceptance_services/` (existing suite), not `tests/acceptance/` — accepted — cost: none.
+- Task 5 fix round: controller verified a doc line and 2 asserts by diff, no re-review seat — accepted — cost: a stale doc line.
+- Task 3: DB name `bridge_db` (plan/brief) over `mt5_bridge_db` (older rules text), docs aligned — accepted — cost: rename if the owner prefers.
+- Task 7: DST — accepted as a documented limitation for spec 002 (owner-only use; new deals use the correct current offset, only a backfill spanning a DST change is off by 1 h; manual `ServerUtcOffsetMinutes` override exists). Also, the old `mt5` service (DST-aware) and the EA write the same trade document, so use one path per account; if both run, the `mt5` service's times win only until the next EA push. The proper fix (a server-timezone rule like the mt5 service's ZoneConverter, ideally converted server-side) is a follow-up, listed in specs/README.md backlog — cost: hourly/daily stats of old backfilled deals skewed by 1 h until fixed.
+- Task 7: 408/429/5xx-other-than-503 retried rather than dropped; zero-volume BUY/SELL skipped client-side — accepted — cost: none expected.
+

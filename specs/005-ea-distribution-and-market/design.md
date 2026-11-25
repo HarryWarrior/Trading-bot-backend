@@ -19,3 +19,5 @@ builds, versioning and auto-update notice, publishing on the MQL5 Market, licens
 ## 3. Open questions
 
 Pricing model, support obligations, whether the web SaaS and the Market EA are sold together.
+
+Carried over from 002: DST-correct deal times (server-timezone rule, ideally converted server-side) before opening the EA to other users.
